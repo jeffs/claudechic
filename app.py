@@ -51,6 +51,7 @@ from claude_agent_sdk.types import (
     PermissionResult,
     PermissionResultAllow,
     PermissionResultDeny,
+    HookMatcher,
 )
 
 
@@ -837,6 +838,180 @@ class SelectionPrompt(Static):
         return self._result_value
 
 
+class QuestionPrompt(Static):
+    """Multi-question prompt for AskUserQuestion tool."""
+
+    can_focus = True
+
+    def __init__(self, questions: list[dict]) -> None:
+        super().__init__()
+        self.questions = questions
+        self.current_q = 0
+        self.selected_idx = 0
+        self.answers: dict[str, str] = {}
+        self._result_event = threading.Event()
+        self._in_other_mode = False  # Whether typing in "Other" input
+
+    def compose(self) -> ComposeResult:
+        yield from self._render_question()
+
+    def _render_question(self):
+        """Yield widgets for current question."""
+        q = self.questions[self.current_q]
+        yield Static(f"[{self.current_q + 1}/{len(self.questions)}] {q['question']}", classes="prompt-title")
+        for i, opt in enumerate(q.get('options', [])):
+            classes = "prompt-option selected" if i == self.selected_idx else "prompt-option"
+            label = opt.get('label', '?')
+            desc = opt.get('description', '')
+            text = f"{i + 1}. {label}" + (f" - {desc}" if desc else "")
+            yield Static(text, classes=classes, id=f"opt-{i}")
+        # "Other" option
+        other_idx = len(q.get('options', []))
+        classes = "prompt-option selected" if self.selected_idx == other_idx else "prompt-option"
+        yield Static(f"{other_idx + 1}. Other:", classes=classes, id=f"opt-{other_idx}")
+
+    def on_mount(self) -> None:
+        self.focus()
+
+    def _update_display(self) -> None:
+        """Refresh display for current question."""
+        self._in_other_mode = False
+        self.remove_children()
+        for w in self._render_question():
+            self.mount(w)
+
+    def _update_selection(self) -> None:
+        """Update visual selection."""
+        q = self.questions[self.current_q]
+        total = len(q.get('options', [])) + 1
+        for i in range(total):
+            try:
+                opt = self.query_one(f"#opt-{i}", Static)
+                if i == self.selected_idx:
+                    opt.add_class("selected")
+                else:
+                    opt.remove_class("selected")
+            except Exception:
+                pass
+
+    def on_key(self, event) -> None:
+        # If in other mode, let Input handle keys (except escape/enter)
+        if self._in_other_mode:
+            if event.key == "escape":
+                self._exit_other_mode()
+                event.prevent_default()
+                event.stop()
+            elif event.key == "enter":
+                self._submit_other()
+                event.prevent_default()
+                event.stop()
+            return
+
+        q = self.questions[self.current_q]
+        options = q.get('options', [])
+        total = len(options) + 1
+
+        if event.key == "up":
+            self.selected_idx = (self.selected_idx - 1) % total
+            self._update_selection()
+            event.prevent_default()
+            event.stop()
+        elif event.key == "down":
+            self.selected_idx = (self.selected_idx + 1) % total
+            self._update_selection()
+            event.prevent_default()
+            event.stop()
+        elif event.key == "enter":
+            self._select_current()
+            event.prevent_default()
+            event.stop()
+        elif event.key == "escape":
+            self._resolve_cancelled()
+            event.prevent_default()
+            event.stop()
+        elif event.key.isdigit():
+            idx = int(event.key) - 1
+            if 0 <= idx < total:
+                self.selected_idx = idx
+                self._select_current()
+                event.prevent_default()
+                event.stop()
+
+    def _select_current(self) -> None:
+        """Select current option and advance to next question or finish."""
+        q = self.questions[self.current_q]
+        options = q.get('options', [])
+
+        if self.selected_idx < len(options):
+            # Regular option - record and advance
+            answer = options[self.selected_idx].get('label', '?')
+            self._record_answer(answer)
+        else:
+            # "Other" - show text input
+            self._enter_other_mode()
+
+    def _enter_other_mode(self) -> None:
+        """Show text input for custom answer."""
+        self._in_other_mode = True
+        from textual.widgets import Input
+        input_widget = Input(placeholder="Type your answer...", id="other-input")
+        self.mount(input_widget)
+        input_widget.focus()
+
+    def _exit_other_mode(self) -> None:
+        """Cancel other mode and return to selection."""
+        self._in_other_mode = False
+        try:
+            self.query_one("#other-input").remove()
+        except Exception:
+            pass
+        self.focus()
+
+    def _submit_other(self) -> None:
+        """Submit the custom answer from text input."""
+        try:
+            input_widget = self.query_one("#other-input")
+            answer = input_widget.value.strip()
+            if answer:
+                self._record_answer(answer)
+            else:
+                self._exit_other_mode()
+        except Exception:
+            self._exit_other_mode()
+
+    def _record_answer(self, answer: str) -> None:
+        """Record answer and advance to next question or finish."""
+        q = self.questions[self.current_q]
+        self.answers[q['question']] = answer
+
+        if self.current_q < len(self.questions) - 1:
+            self.current_q += 1
+            self.selected_idx = 0
+            self._update_display()
+        else:
+            self._resolve()
+
+    def _resolve(self) -> None:
+        if not self._result_event.is_set():
+            self._result_event.set()
+        self.remove()
+
+    def _resolve_cancelled(self) -> None:
+        self.answers = {}
+        self._resolve()
+
+    async def wait(self) -> dict[str, str]:
+        """Wait for all answers. Returns answers dict or empty if cancelled."""
+        while not self._result_event.is_set():
+            await anyio.sleep(0.05)
+        return self.answers
+
+
+async def _dummy_hook(input_data, tool_use_id, context):
+    """Dummy hook required for can_use_tool to work in Python SDK."""
+    return {"continue_": True}
+
+
 class ChatApp(App):
     """Main chat application."""
 
@@ -852,6 +1027,9 @@ class ChatApp(App):
     # Auto-approve Edit/Write tools (but still prompt for Bash, etc.)
     AUTO_EDIT_TOOLS = {"Edit", "Write"}
 
+    # Tools to collapse by default (not very informative when expanded)
+    COLLAPSE_BY_DEFAULT = {"WebSearch", "WebFetch", "AskUserQuestion"}
+
     RECENT_TOOLS_EXPANDED = 2  # Keep last N tool uses expanded
 
     auto_approve_edits = reactive(False)  # When True, auto-approve Edit/Write
@@ -863,6 +1041,8 @@ class ChatApp(App):
             env={"ANTHROPIC_API_KEY": ""},  # Use Max subscription, not API key
             setting_sources=["user", "project", "local"],
             can_use_tool=self._handle_permission,
+            # Dummy hook required for can_use_tool to work in Python SDK
+            hooks={"PreToolUse": [HookMatcher(matcher=None, hooks=[_dummy_hook])]},
         )
         self.client: ClaudeSDKClient | None = None
         self.current_response: ChatMessage | None = None
@@ -881,6 +1061,11 @@ class ChatApp(App):
     ) -> PermissionResult:
         """Handle permission request from SDK - shows UI prompt."""
         log.info(f"Permission requested for {tool_name}: {str(tool_input)[:100]}")
+
+        # Handle AskUserQuestion - show question UI and return answers
+        if tool_name == "AskUserQuestion":
+            return await self._handle_ask_user_question(tool_input)
+
         # Auto-approve Edit/Write if enabled
         if self.auto_approve_edits and tool_name in self.AUTO_EDIT_TOOLS:
             log.info(f"Auto-approved {tool_name}")
@@ -918,6 +1103,43 @@ class ChatApp(App):
             return PermissionResultAllow()
         else:
             return PermissionResultDeny(message="User denied permission")
+
+    async def _handle_ask_user_question(self, tool_input: dict[str, Any]) -> PermissionResult:
+        """Handle AskUserQuestion tool - show questions and return answers."""
+        questions = tool_input.get('questions', [])
+        if not questions:
+            log.warning("AskUserQuestion with no questions")
+            return PermissionResultAllow(updated_input=tool_input)
+
+        log.info(f"AskUserQuestion with {len(questions)} questions")
+
+        # Show question prompt UI
+        prompt = QuestionPrompt(questions)
+        input_widget = self.query_one("#input", ChatInput)
+        input_widget.add_class("hidden")
+        self.query_one("#input-wrapper").mount(prompt)
+
+        # Wait for answers
+        answers = await prompt.wait()
+
+        # Clean up UI
+        try:
+            prompt.remove()
+        except Exception:
+            pass
+        input_widget.remove_class("hidden")
+
+        if not answers:
+            # User cancelled
+            log.info("AskUserQuestion cancelled by user")
+            return PermissionResultDeny(message="User cancelled questions")
+
+        log.info(f"AskUserQuestion answers: {answers}")
+        # Return with updated input containing answers
+        return PermissionResultAllow(updated_input={
+            'questions': questions,
+            'answers': answers,
+        })
 
     def action_cycle_permission_mode(self) -> None:
         """Toggle auto-approve for Edit/Write tools."""
@@ -1114,11 +1336,12 @@ class ChatApp(App):
             old = self.recent_tools.pop(0)
             old.collapse()
         # Create TaskWidget for Task tool, otherwise ToolUseWidget
+        collapsed = event.block.name in self.COLLAPSE_BY_DEFAULT
         if event.block.name == "Task":
-            widget = TaskWidget(event.block, collapsed=False)
+            widget = TaskWidget(event.block, collapsed=collapsed)
             self.active_tasks[event.block.id] = widget
         else:
-            widget = ToolUseWidget(event.block, collapsed=False)
+            widget = ToolUseWidget(event.block, collapsed=collapsed)
         self.pending_tools[event.block.id] = widget
         self.recent_tools.append(widget)
         chat_view.mount(widget)

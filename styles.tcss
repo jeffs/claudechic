@@ -211,8 +211,8 @@ HeaderIndicators {
     layout: horizontal;
 }
 
-/* Selection prompt */
-SelectionPrompt {
+/* Selection/Question prompts */
+SelectionPrompt, QuestionPrompt {
     height: auto;
     width: 100;
     background: $surface;
@@ -220,17 +220,26 @@ SelectionPrompt {
     padding: 0 1;
 }
 
-SelectionPrompt .prompt-title {
+SelectionPrompt .prompt-title,
+QuestionPrompt .prompt-title {
     color: $text;
-    padding: 0 0 0 0;
 }
 
-SelectionPrompt .prompt-option {
+SelectionPrompt .prompt-option,
+QuestionPrompt .prompt-option {
     padding: 0 0 0 1;
     color: $text-muted;
 }
 
-SelectionPrompt .prompt-option.selected {
+SelectionPrompt .prompt-option.selected,
+QuestionPrompt .prompt-option.selected {
     color: $text;
     background: #333366;
+}
+
+QuestionPrompt #other-input {
+    margin: 0 0 0 1;
+    width: 60;
+    height: 1;
+    border: solid $primary;
 }
