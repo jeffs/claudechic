@@ -1,21 +1,21 @@
-"""Entry point for python -m cc_textual."""
+"""Entry point for alamode CLI."""
 
 import argparse
 import logging
 
-from cc_textual.app import ChatApp
-from cc_textual.sessions import get_recent_sessions
+from claude_alamode.app import ChatApp
+from claude_alamode.sessions import get_recent_sessions
 
 # Set up file logging
 logging.basicConfig(
-    filename="cc-textual.log",
+    filename="alamode.log",
     level=logging.INFO,
     format="%(asctime)s - %(levelname)s - %(message)s",
 )
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Claude Code Textual UI")
+    parser = argparse.ArgumentParser(description="Claude à la Mode")
     parser.add_argument(
         "--resume", "-r", action="store_true", help="Resume the most recent session"
     )
@@ -41,7 +41,7 @@ def main():
     except Exception:
         import traceback
 
-        with open("/tmp/cc-textual-crash.log", "w") as f:
+        with open("/tmp/alamode-crash.log", "w") as f:
             traceback.print_exc(file=f)
         raise
 

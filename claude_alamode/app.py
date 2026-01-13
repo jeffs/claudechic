@@ -36,22 +36,22 @@ from claude_agent_sdk.types import (
     HookMatcher,
 )
 
-from cc_textual.messages import (
+from claude_alamode.messages import (
     StreamChunk,
     ResponseComplete,
     ToolUseMessage,
     ToolResultMessage,
     ContextUpdate,
 )
-from cc_textual.sessions import get_recent_sessions, load_session_messages
-from cc_textual.worktree import (
+from claude_alamode.sessions import get_recent_sessions, load_session_messages
+from claude_alamode.worktree import (
     FinishInfo,
     start_worktree, get_finish_info, get_finish_prompt, get_cleanup_fix_prompt,
     finish_cleanup, list_worktrees, cleanup_worktrees, remove_worktree,
 )
-from cc_textual.formatting import parse_context_tokens
-from cc_textual.permissions import PermissionRequest, dummy_hook
-from cc_textual.widgets import (
+from claude_alamode.formatting import parse_context_tokens
+from claude_alamode.permissions import PermissionRequest, dummy_hook
+from claude_alamode.widgets import (
     ContextHeader,
     ContextBar,
     ChatMessage,

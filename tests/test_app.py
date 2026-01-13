@@ -4,8 +4,8 @@ import asyncio
 import pytest
 from pathlib import Path
 
-from cc_textual import ChatApp
-from cc_textual.widgets import ChatInput
+from claude_alamode import ChatApp
+from claude_alamode.widgets import ChatInput
 from tests.conftest import wait_for
 
 

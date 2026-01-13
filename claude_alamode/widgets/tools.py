@@ -10,13 +10,13 @@ from textual.widgets import Markdown, Static, Collapsible, Button
 
 from claude_agent_sdk import ToolUseBlock, ToolResultBlock
 
-from cc_textual.formatting import (
+from claude_alamode.formatting import (
     format_tool_header,
     format_tool_details,
     format_diff_text,
     get_lang_from_path,
 )
-from cc_textual.widgets.chat import ChatMessage
+from claude_alamode.widgets.chat import ChatMessage
 
 log = logging.getLogger(__name__)
 

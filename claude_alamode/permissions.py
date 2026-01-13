@@ -6,7 +6,7 @@ from typing import Any
 
 import anyio
 
-from cc_textual.formatting import format_tool_header
+from claude_alamode.formatting import format_tool_header
 
 
 @dataclass

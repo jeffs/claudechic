@@ -1,7 +1,7 @@
 [project]
-name = "cc-textual"
+name = "claude-alamode"
 version = "0.1.0"
-description = "Terminal UI for Claude Code built with Textual"
+description = "Claude à la Mode - A stylish terminal UI for Claude Code"
 readme = "README.md"
 requires-python = ">=3.14"
 dependencies = [
@@ -14,7 +14,7 @@ dependencies = [
 ]
 
 [project.scripts]
-cc-textual = "cc_textual.__main__:main"
+alamode = "claude_alamode.__main__:main"
 
 [dependency-groups]
 dev = [

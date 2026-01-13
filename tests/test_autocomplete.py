@@ -3,8 +3,8 @@
 import pytest
 from pathlib import Path
 
-from cc_textual import ChatApp
-from cc_textual.widgets import ChatInput, TextAreaAutoComplete
+from claude_alamode import ChatApp
+from claude_alamode.widgets import ChatInput, TextAreaAutoComplete
 
 
 @pytest.mark.asyncio

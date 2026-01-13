@@ -1,1 +1,1 @@
-"""Tests for cc_textual."""
+"""Tests for Claude à la Mode."""

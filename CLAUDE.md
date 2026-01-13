@@ -1,13 +1,13 @@
-# Claude Code Textual UI
+# Claude à la Mode
 
-Terminal UI for Claude Code built with Textual, wrapping the `claude-agent-sdk`.
+A stylish terminal UI for Claude Code, built with Textual and wrapping the `claude-agent-sdk`.
 
 ## Run
 
 ```bash
-uv run python -m cc_textual
-uv run python -m cc_textual --resume     # Resume most recent session
-uv run python -m cc_textual -s <uuid>    # Resume specific session
+uv run alamode
+uv run alamode --resume     # Resume most recent session
+uv run alamode -s <uuid>    # Resume specific session
 ```
 
 Requires Claude Code to be logged in with a Max/Pro subscription (`claude /login`).
@@ -15,7 +15,7 @@ Requires Claude Code to be logged in with a Max/Pro subscription (`claude /login
 ## File Map
 
 ```
-cc_textual/
+claude_alamode/
 ├── __init__.py        # Package entry, exports ChatApp
 ├── __main__.py        # CLI entry point
 ├── app.py             # ChatApp - main application, event handlers

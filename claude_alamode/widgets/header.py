@@ -9,7 +9,7 @@ from textual.widgets import Header
 from textual.widgets._header import HeaderIcon, HeaderTitle
 from rich.text import Text
 
-from cc_textual.formatting import MAX_CONTEXT_TOKENS
+from claude_alamode.formatting import MAX_CONTEXT_TOKENS
 
 
 class CPUBar(Widget):
