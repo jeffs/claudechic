@@ -107,6 +107,28 @@ class ChatApp(App):
         self.interactions: asyncio.Queue[PermissionRequest] = asyncio.Queue()
         self.completions: asyncio.Queue[ResponseComplete] = asyncio.Queue()
 
+    async def _replace_client(self, options: ClaudeAgentOptions) -> None:
+        """Safely replace current client with a new one."""
+        # Cancel any permission prompts waiting for user input
+        for prompt in list(self.query(SelectionPrompt)) + list(self.query(QuestionPrompt)):
+            prompt.cancel()
+        # Cancel any workers using the client before we disconnect
+        for worker in list(self.workers):
+            if worker.group in ("claude", "context") and worker.is_running:
+                worker.cancel()
+        old = self.client
+        self.client = None
+        if old:
+            try:
+                await old.interrupt()
+            except Exception:
+                pass
+            # Skip disconnect() - it causes race conditions with SDK cleanup.
+            # interrupt() is sufficient to stop the subprocess.
+        new_client = ClaudeSDKClient(options)
+        await new_client.connect()
+        self.client = new_client
+
     async def _handle_permission(
         self, tool_name: str, tool_input: dict[str, Any], context: ToolPermissionContext
     ) -> PermissionResult:
@@ -225,8 +247,14 @@ class ChatApp(App):
         )
 
     async def on_mount(self) -> None:
-        self.client = ClaudeSDKClient(self._make_options())
+        # Create client with resume if provided (avoids double client creation)
+        resume = self._resume_on_start
+        self.client = ClaudeSDKClient(self._make_options(resume=resume))
         await self.client.connect()
+        if resume:
+            self._load_and_display_history(resume)
+            self.session_id = resume
+            self.notify(f"Resuming {resume[:8]}...")
         # Fetch SDK commands and update autocomplete
         await self._update_slash_commands()
         self.query_one("#input", ChatInput).focus()
@@ -241,12 +269,7 @@ class ChatApp(App):
             autocomplete.slash_commands = all_commands
         except Exception as e:
             log.warning(f"Failed to fetch SDK commands: {e}")
-        if self._resume_on_start:
-            self._load_and_display_history(self._resume_on_start)
-            self.notify(f"Resuming {self._resume_on_start[:8]}...")
-            self.resume_session(self._resume_on_start)
-        else:
-            self.refresh_context()
+        self.refresh_context()
 
     def _load_and_display_history(self, session_id: str, cwd: Path | None = None) -> None:
         """Load session history and display in chat view."""
@@ -486,12 +509,7 @@ class ChatApp(App):
         """Resume a session by creating a new client."""
         log.info(f"resume_session started: {session_id}")
         try:
-            if self.client:
-                await self.client.disconnect()
-            self.client = None
-            client = ClaudeSDKClient(self._make_options(resume=session_id))
-            await client.connect()
-            self.client = client
+            await self._replace_client(self._make_options(resume=session_id))
             self.session_id = session_id
             self.post_message(ResponseComplete(None))
             self.refresh_context()
@@ -528,11 +546,14 @@ class ChatApp(App):
 
     async def _cleanup_and_exit(self) -> None:
         """Disconnect SDK and exit."""
-        if self.client:
+        old = self.client
+        self.client = None
+        if old:
             try:
-                await self.client.disconnect()
+                await old.interrupt()
             except Exception:
-                pass  # Best effort cleanup
+                pass
+            # Skip disconnect() - causes race conditions
         self.exit()
 
     def _show_session_picker(self) -> None:
@@ -675,23 +696,11 @@ Do NOT remove the worktree or delete the branch - the app will handle cleanup.""
     async def _reconnect_sdk(self, new_cwd: Path) -> None:
         """Reconnect SDK with a new working directory."""
         try:
-            old_client = self.client
-
-            # Interrupt old client first (like pressing Escape)
-            if old_client:
-                try:
-                    await old_client.interrupt()
-                except Exception:
-                    pass
-
             # Check for existing session BEFORE creating client
             sessions = get_recent_sessions(limit=1, cwd=new_cwd)
             resume_id = sessions[0][0] if sessions else None
 
-            # Create new client with resume if session exists
-            new_client = ClaudeSDKClient(self._make_options(cwd=new_cwd, resume=resume_id))
-            await new_client.connect()
-            self.client = new_client
+            await self._replace_client(self._make_options(cwd=new_cwd, resume=resume_id))
 
             # Clear internal state
             self.current_response = None
@@ -705,9 +714,12 @@ Do NOT remove the worktree or delete the branch - the app will handle cleanup.""
                 self.session_id = resume_id
                 self.notify(f"Resumed session in {new_cwd.name}")
             else:
-                # Clear chat view only if not resuming(resume does its own clear)
-                chat_view = self.query_one("#chat-view", VerticalScroll)
-                chat_view.remove_children()
+                # Clear chat view only if not resuming (resume does its own clear)
+                try:
+                    chat_view = self.query_one("#chat-view", VerticalScroll)
+                    chat_view.remove_children()
+                except Exception:
+                    pass  # App may be exiting
                 self.session_id = None
                 self.notify(f"SDK reconnected in {new_cwd.name}")
         except Exception as e:
