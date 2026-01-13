@@ -42,7 +42,10 @@ from cc_textual.messages import (
     ContextUpdate,
 )
 from cc_textual.sessions import get_recent_sessions, load_session_messages
-from cc_textual.worktree import start_worktree, get_finish_worktree_info, list_worktrees
+from cc_textual.worktree import (
+    start_worktree, get_finish_worktree_info, list_worktrees,
+    cleanup_worktrees, remove_worktree,
+)
 from cc_textual.formatting import parse_context_tokens
 from cc_textual.permissions import PermissionRequest, dummy_hook
 from cc_textual.widgets import (
@@ -219,7 +222,7 @@ class ChatApp(App):
         self.notify(f"Auto-edit: {'ON' if self.auto_approve_edits else 'OFF'}")
 
     # Built-in slash commands (local to this app)
-    LOCAL_COMMANDS = ["/clear", "/resume", "/worktree", "/worktree finish"]
+    LOCAL_COMMANDS = ["/clear", "/resume", "/worktree", "/worktree finish", "/worktree cleanup"]
 
     def compose(self) -> ComposeResult:
         yield ContextHeader()
@@ -617,6 +620,9 @@ Do NOT remove the worktree or delete the branch - the app will handle cleanup.""
             chat_view.mount(user_msg)
             self._show_thinking()
             self.run_claude(prompt)
+        elif subcommand == "cleanup":
+            branches = parts[2].split() if len(parts) > 2 else None
+            self._handle_worktree_cleanup(branches)
         else:
             self._switch_or_create_worktree(subcommand)
 
@@ -637,12 +643,69 @@ Do NOT remove the worktree or delete the branch - the app will handle cleanup.""
             else:
                 self.notify(message, severity="error")
 
+    def _handle_worktree_cleanup(self, branches: list[str] | None) -> None:
+        """Handle /worktree cleanup command."""
+        results = cleanup_worktrees(branches)
+
+        if not results:
+            self.notify("No worktrees to clean up")
+            return
+
+        # Check if any need confirmation
+        needs_confirm = [(b, msg) for b, success, msg, confirm in results if confirm]
+        removed = [(b, msg) for b, success, msg, confirm in results if success]
+        failed = [(b, msg) for b, success, msg, confirm in results if not success and not confirm]
+
+        # Report results
+        for branch, msg in removed:
+            self.notify(f"Removed: {branch}")
+        for branch, msg in failed:
+            self.notify(f"Failed: {branch} - {msg}", severity="error")
+
+        # Prompt for confirmation on dirty/unmerged
+        if needs_confirm:
+            self._run_cleanup_prompt(needs_confirm)
+
+    @work(group="cleanup_prompt", exclusive=True, exit_on_error=False)
+    async def _run_cleanup_prompt(self, needs_confirm: list[tuple[str, str]]) -> None:
+        """Show prompt for confirming worktree removal."""
+        from cc_textual.widgets import SelectionPrompt
+        input_wrapper = self.query_one("#input-wrapper", Horizontal)
+        try:
+            input_wrapper.query_one("#input", ChatInput).remove()
+        except Exception:
+            pass
+
+        # Build options: (value, label) tuples
+        branches_to_confirm = [b for b, _ in needs_confirm]
+        options = [("all", f"Remove all ({len(needs_confirm)})")]
+        options.extend((b, f"Remove {b} ({msg})") for b, msg in needs_confirm)
+        options.append(("cancel", "Cancel"))
+
+        prompt = SelectionPrompt("Worktrees with changes or unmerged:", options)
+        input_wrapper.mount(prompt)
+        prompt.focus()
+
+        selected = await prompt.wait()
+
+        if selected and selected != "cancel":
+            to_remove = branches_to_confirm if selected == "all" else [selected]
+            worktrees = list_worktrees()
+            for branch in to_remove:
+                wt = next((w for w in worktrees if w.branch == branch), None)
+                if wt:
+                    success, msg = remove_worktree(wt, force=True)
+                    self.notify(f"Removed: {branch}" if success else msg, severity="error" if not success else "information")
+        else:
+            self.notify("Cleanup cancelled")
+
+        self._restore_chat_input()
+
     def _attempt_worktree_cleanup(self) -> None:
         """Attempt to clean up worktree, asking Claude for help if it fails."""
         info = self._pending_worktree_finish
         if not info:
             return
-
         main_dir = Path(info["main_dir"])
         worktree_dir = info["worktree_dir"]
         branch_name = info["branch_name"]

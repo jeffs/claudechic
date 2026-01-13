@@ -110,6 +110,92 @@ class WorktreeInfo:
     is_main: bool
 
 
+def has_uncommitted_changes(worktree_path: Path) -> bool:
+    """Check if a worktree has uncommitted changes."""
+    result = subprocess.run(
+        ["git", "-C", str(worktree_path), "status", "--porcelain"],
+        capture_output=True, text=True, check=True
+    )
+    return bool(result.stdout.strip())
+
+
+def is_branch_merged(branch: str, into_branch: str = "main") -> bool:
+    """Check if branch is merged into another branch."""
+    result = subprocess.run(
+        ["git", "branch", "--merged", into_branch],
+        capture_output=True, text=True, check=True
+    )
+    merged = [b.strip().lstrip("* ") for b in result.stdout.strip().split("\n")]
+    return branch in merged
+
+
+def remove_worktree(worktree: WorktreeInfo, force: bool = False) -> tuple[bool, str]:
+    """Remove a worktree and its branch. Returns (success, message)."""
+    try:
+        # Remove the worktree
+        cmd = ["git", "worktree", "remove", str(worktree.path)]
+        if force:
+            cmd.append("--force")
+        subprocess.run(cmd, check=True, capture_output=True, text=True)
+
+        # Delete the branch
+        delete_flag = "-D" if force else "-d"
+        subprocess.run(
+            ["git", "branch", delete_flag, worktree.branch],
+            check=True, capture_output=True, text=True
+        )
+        return True, f"Removed {worktree.branch}"
+    except subprocess.CalledProcessError as e:
+        return False, f"Failed to remove {worktree.branch}: {e.stderr}"
+
+
+def cleanup_worktrees(branches: list[str] | None = None) -> list[tuple[str, bool, str, bool]]:
+    """
+    Clean up worktrees.
+
+    Args:
+        branches: Specific branches to remove. If None, removes all safe worktrees.
+
+    Returns:
+        List of (branch_name, success, message, needs_confirmation).
+        needs_confirmation=True means the branch has changes or is unmerged.
+    """
+    worktrees = list_worktrees()
+    main_wt = get_main_worktree()
+    main_branch = main_wt[1] if main_wt else "main"
+
+    # If no branches specified, target all non-main worktrees
+    if branches is None:
+        branches = [wt.branch for wt in worktrees if not wt.is_main]
+
+    results = []
+    for branch in branches:
+        wt = next((w for w in worktrees if w.branch == branch), None)
+        if wt is None:
+            results.append((branch, False, f"No worktree for branch '{branch}'", False))
+            continue
+        if wt.is_main:
+            results.append((branch, False, "Cannot remove main worktree", False))
+            continue
+
+        merged = is_branch_merged(branch, main_branch)
+        dirty = has_uncommitted_changes(wt.path)
+
+        if dirty or not merged:
+            # Needs confirmation - don't remove yet
+            reason = []
+            if dirty:
+                reason.append("has uncommitted changes")
+            if not merged:
+                reason.append("not merged")
+            results.append((branch, False, ", ".join(reason), True))
+        else:
+            success, msg = remove_worktree(wt)
+            results.append((branch, success, msg, False))
+
+    return results
+
+
 def list_worktrees() -> list[WorktreeInfo]:
     """List all git worktrees for this repo."""
     result = subprocess.run(
