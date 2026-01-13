@@ -3,6 +3,8 @@
 import asyncio
 from contextlib import asynccontextmanager
 import logging
+import os
+import sys
 import time
 from pathlib import Path
 from typing import Any
@@ -554,7 +556,11 @@ class ChatApp(App):
                 await old.interrupt()
             except Exception:
                 pass
-            # Skip disconnect() - causes race conditions
+            # Brief delay to let SDK hooks complete before stream closes
+            await asyncio.sleep(0.1)
+            # Skip disconnect() - causes race conditions with SDK cleanup
+        # Suppress SDK stderr noise during exit (stream closed errors)
+        sys.stderr = open(os.devnull, "w")
         self.exit()
 
     def _show_session_picker(self) -> None:
