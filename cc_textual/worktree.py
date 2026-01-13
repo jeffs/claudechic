@@ -158,3 +158,45 @@ def get_worktree_status() -> str:
         f"Directory: {_active_worktree.worktree_dir}\n"
         f"Base branch: {_active_worktree.base_branch}"
     )
+
+
+@dataclass
+class WorktreeInfo:
+    """Info about an existing worktree."""
+    path: Path
+    branch: str
+    is_main: bool
+
+
+def list_worktrees() -> list[WorktreeInfo]:
+    """List all git worktrees for this repo."""
+    result = subprocess.run(
+        ["git", "worktree", "list", "--porcelain"],
+        capture_output=True, text=True, check=True
+    )
+
+    worktrees = []
+    current_path = None
+    current_branch = None
+
+    for line in result.stdout.strip().split("\n"):
+        if line.startswith("worktree "):
+            current_path = Path(line[9:])
+        elif line.startswith("branch refs/heads/"):
+            current_branch = line[18:]
+        elif line == "":
+            if current_path and current_branch:
+                # Main worktree is the one without a hyphenated name pattern
+                main_repo = get_repo_name()
+                is_main = current_path.name == main_repo
+                worktrees.append(WorktreeInfo(current_path, current_branch, is_main))
+            current_path = None
+            current_branch = None
+
+    # Handle last entry if no trailing newline
+    if current_path and current_branch:
+        main_repo = get_repo_name()
+        is_main = current_path.name == main_repo
+        worktrees.append(WorktreeInfo(current_path, current_branch, is_main))
+
+    return worktrees

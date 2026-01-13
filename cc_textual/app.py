@@ -8,7 +8,7 @@ from typing import Any
 
 from textual.app import App, ComposeResult
 from textual.binding import Binding
-from textual.containers import VerticalScroll, Horizontal
+from textual.containers import VerticalScroll, Horizontal, Center
 from textual.events import MouseUp
 from textual.reactive import reactive
 from textual.widgets import Footer, ListView, TextArea
@@ -41,7 +41,7 @@ from cc_textual.messages import (
     ContextUpdate,
 )
 from cc_textual.sessions import get_recent_sessions, load_session_messages
-from cc_textual.worktree import start_worktree, finish_worktree, get_worktree_status
+from cc_textual.worktree import start_worktree, finish_worktree, get_worktree_status, list_worktrees
 from cc_textual.formatting import parse_context_tokens
 from cc_textual.permissions import PermissionRequest, dummy_hook
 from cc_textual.widgets import (
@@ -55,6 +55,7 @@ from cc_textual.widgets import (
     SelectionPrompt,
     QuestionPrompt,
     SessionItem,
+    WorktreePrompt,
 )
 
 log = logging.getLogger(__name__)
@@ -486,26 +487,33 @@ class ChatApp(App):
     def _handle_worktree_command(self, command: str) -> None:
         """Handle /worktree commands."""
         parts = command.split(maxsplit=2)
-        chat_view = self.query_one("#chat-view", VerticalScroll)
 
         if len(parts) == 1:
-            # Just /worktree - show status
-            msg = ChatMessage(get_worktree_status())
-            msg.add_class("system-message")
-            chat_view.mount(msg)
+            self._show_worktree_modal()
             return
 
         subcommand = parts[1]
+        if subcommand == "finish":
+            success, message, original_cwd = finish_worktree()
+            if success and original_cwd:
+                self.notify("Worktree merged and cleaned up")
+                self.sub_title = ""
+                self._reconnect_sdk(original_cwd)
+            else:
+                self.notify(message, severity="error")
+        else:
+            self._switch_or_create_worktree(subcommand)
 
-        if subcommand == "start":
-            if len(parts) < 3:
-                self.notify("Usage: /worktree start <feature-name>", severity="error")
-                return
-            feature_name = parts[2]
+    def _switch_or_create_worktree(self, feature_name: str) -> None:
+        """Switch to existing worktree or create new one."""
+        existing = [wt for wt in list_worktrees() if wt.branch == feature_name]
+        if existing:
+            wt = existing[0]
+            self.notify(f"Switching to {feature_name}...")
+            self.sub_title = f"[worktree: {feature_name}]"
+            self._reconnect_sdk(wt.path)
+        else:
             success, message, new_cwd = start_worktree(feature_name)
-            msg = ChatMessage(message)
-            msg.add_class("system-message")
-            chat_view.mount(msg)
             if success and new_cwd:
                 self.notify(f"Worktree ready: {feature_name}")
                 self.sub_title = f"[worktree: {feature_name}]"
@@ -513,31 +521,52 @@ class ChatApp(App):
             else:
                 self.notify(message, severity="error")
 
-        elif subcommand == "finish":
-            success, message, original_cwd = finish_worktree()
-            msg = ChatMessage(message)
-            msg.add_class("system-message")
-            chat_view.mount(msg)
-            if success and original_cwd:
-                self.notify("Worktree merged and cleaned up")
-                self.sub_title = ""
-                self._reconnect_sdk(original_cwd)
-            else:
-                self.notify(message, severity="error")
+    def _show_worktree_modal(self) -> None:
+        """Show worktree selection modal."""
+        worktrees = [(str(wt.path), wt.branch) for wt in list_worktrees() if not wt.is_main]
+        prompt = WorktreePrompt(worktrees)
+        container = Center(prompt, id="worktree-modal")
+        self.mount(container)
+        self._wait_for_worktree_selection(prompt, container)
 
-        else:
-            self.notify(f"Unknown subcommand: {subcommand}. Use: start <name>, finish", severity="error")
+    @work(group="worktree", exclusive=True, exit_on_error=False)
+    async def _wait_for_worktree_selection(self, prompt: WorktreePrompt, container: Center) -> None:
+        """Wait for worktree modal selection and act on it."""
+        try:
+            result = await prompt.wait()
+            container.remove()
+            if result is None:
+                return  # Cancelled
 
-        self.call_after_refresh(chat_view.scroll_end, animate=False)
+            action, value = result
+            if action == "switch":
+                # value is the path; find the branch name from worktrees
+                path = Path(value)
+                worktrees = {str(wt.path): wt.branch for wt in list_worktrees()}
+                branch = worktrees.get(value, path.name)
+                self.notify(f"Switching to {branch}...")
+                self.sub_title = f"[worktree: {branch}]"
+                self._reconnect_sdk(path)
+            elif action == "new":
+                self._switch_or_create_worktree(value)
+        except Exception as e:
+            log.exception(f"Worktree selection error: {e}")
+            self.notify(f"Error: {e}", severity="error")
 
     @work(group="reconnect", exclusive=True, exit_on_error=False)
     async def _reconnect_sdk(self, new_cwd: Path) -> None:
         """Reconnect SDK with a new working directory."""
-        log.info(f"Reconnecting SDK with cwd: {new_cwd}")
         try:
-            if self.client:
-                await self.client.disconnect()
-            self.client = None
+            old_client = self.client
+
+            # Interrupt old client first (like pressing Escape)
+            if old_client:
+                try:
+                    old_client.interrupt()
+                except Exception:
+                    pass
+
+            # Create new client
             options = ClaudeAgentOptions(
                 permission_mode="default",
                 env={"ANTHROPIC_API_KEY": ""},
@@ -546,11 +575,23 @@ class ChatApp(App):
                 can_use_tool=self._handle_permission,
                 hooks={"PreToolUse": [HookMatcher(matcher=None, hooks=[dummy_hook])]},
             )
-            client = ClaudeSDKClient(options)
-            await client.connect()
-            self.client = client
+            new_client = ClaudeSDKClient(options)
+            await new_client.connect()
+            self.client = new_client
+
+            # Don't disconnect old client - let it be garbage collected
+            # The disconnect() seems to cause the app to exit
+
+            # Clear UI state - this is effectively a new session
+            chat_view = self.query_one("#chat-view", VerticalScroll)
+            chat_view.remove_children()
+            self.current_response = None
+            self.pending_tools.clear()
+            self.active_tasks.clear()
+            self.recent_tools.clear()
+            self.session_id = None
+
             self.notify(f"SDK reconnected in {new_cwd.name}")
-            log.info(f"SDK reconnected with cwd: {new_cwd}")
         except Exception as e:
             log.exception(f"SDK reconnect failed: {e}")
             self.notify(f"SDK reconnect failed: {e}", severity="error")
