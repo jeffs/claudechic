@@ -79,6 +79,14 @@ from claude_alamode.errors import log_exception, setup_logging
 log = logging.getLogger(__name__)
 
 
+def _scroll_if_at_bottom(scroll_view: VerticalScroll) -> None:
+    """Scroll to end only if user hasn't scrolled up."""
+    # Consider "at bottom" if within 50px of the end
+    at_bottom = scroll_view.scroll_y >= scroll_view.max_scroll_y - 50
+    if at_bottom:
+        scroll_view.scroll_end(animate=False)
+
+
 class ChatApp(App):
     """Main chat application."""
 
@@ -212,7 +220,7 @@ class ChatApp(App):
         if chat_view:
             error_widget = ErrorMessage(message, exception)
             chat_view.mount(error_widget)
-            self.call_after_refresh(chat_view.scroll_end, animate=False)
+            self.call_after_refresh(_scroll_if_at_bottom, chat_view)
         # Also show toast for visibility
         self.notify(message, severity="error")
 
@@ -449,7 +457,7 @@ class ChatApp(App):
                 block = ToolUseBlock(id=m.get("id", ""), name=m["name"], input=m["input"])
                 widget = ToolUseWidget(block, collapsed=True, completed=True)
                 chat_view.mount(widget)
-        self.call_after_refresh(chat_view.scroll_end, animate=False)
+        self.call_after_refresh(_scroll_if_at_bottom, chat_view)
 
     @work(group="context", exclusive=True, exit_on_error=False)
     async def refresh_context(self) -> None:
@@ -523,7 +531,7 @@ class ChatApp(App):
         user_msg = ChatMessage(display_text)
         user_msg.add_class("user-message")
         chat_view.mount(user_msg)
-        self.call_after_refresh(chat_view.scroll_end, animate=False)
+        self.call_after_refresh(_scroll_if_at_bottom, chat_view)
 
         self.current_response = None
         self._show_thinking()
@@ -593,7 +601,7 @@ class ChatApp(App):
         if not chat_view:
             return
         chat_view.mount(ThinkingIndicator())
-        self.call_after_refresh(chat_view.scroll_end, animate=False)
+        self.call_after_refresh(_scroll_if_at_bottom, chat_view)
 
     def _hide_thinking(self) -> None:
         try:
@@ -623,7 +631,7 @@ class ChatApp(App):
                 agent.current_response.add_class("after-tool")
             chat_view.mount(agent.current_response)
         agent.current_response.append_content(event.text)
-        self.call_after_refresh(chat_view.scroll_end, animate=False)
+        self.call_after_refresh(_scroll_if_at_bottom, chat_view)
 
     def on_tool_use_message(self, event: ToolUseMessage) -> None:
         self._hide_thinking()
@@ -652,7 +660,7 @@ class ChatApp(App):
                 existing[0].update_todos(todos)
             elif self.size.width < self.SIDEBAR_MIN_WIDTH:
                 chat_view.mount(TodoWidget(todos))
-            self.call_after_refresh(chat_view.scroll_end, animate=False)
+            self.call_after_refresh(_scroll_if_at_bottom, chat_view)
             self._show_thinking()
             return
 
@@ -670,7 +678,7 @@ class ChatApp(App):
         agent.pending_tools[event.block.id] = widget
         agent.recent_tools.append(widget)
         chat_view.mount(widget)
-        self.call_after_refresh(chat_view.scroll_end, animate=False)
+        self.call_after_refresh(_scroll_if_at_bottom, chat_view)
         self._hide_thinking()  # Tool widget has its own spinner
 
     def on_tool_result_message(self, event: ToolResultMessage) -> None:
