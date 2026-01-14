@@ -704,7 +704,7 @@ class ChatApp(App):
 
     def on_resize(self, event) -> None:
         """Reposition right sidebar on resize."""
-        self._position_right_sidebar()
+        self.call_after_refresh(self._position_right_sidebar)
 
     def _position_right_sidebar(self) -> None:
         """Show/hide right sidebar based on terminal width and content."""
