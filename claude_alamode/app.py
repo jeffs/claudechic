@@ -1,8 +1,11 @@
 """Claude Code Textual UI - Main application."""
 
 import asyncio
+import base64
 from contextlib import asynccontextmanager
+import json
 import logging
+import mimetypes
 import os
 import sys
 import time
@@ -57,6 +60,7 @@ from claude_alamode.widgets import (
     ChatMessage,
     ChatInput,
     ThinkingIndicator,
+    ImageAttachments,
     ToolUseWidget,
     TaskWidget,
     TodoWidget,
@@ -117,6 +121,8 @@ class ChatApp(App):
         # Event queues for testing
         self.interactions: asyncio.Queue[PermissionRequest] = asyncio.Queue()
         self.completions: asyncio.Queue[ResponseComplete] = asyncio.Queue()
+        # Pending images to attach to next message
+        self.pending_images: list[tuple[str, str, str]] = []  # (filename, media_type, base64_data)
 
     async def _replace_client(self, options: ClaudeAgentOptions) -> None:
         """Safely replace current client with a new one."""
@@ -139,6 +145,44 @@ class ChatApp(App):
         new_client = ClaudeSDKClient(options)
         await new_client.connect()
         self.client = new_client
+
+    def _attach_image(self, path: Path) -> None:
+        """Read and queue image for next message."""
+        try:
+            data = base64.b64encode(path.read_bytes()).decode()
+            media_type = mimetypes.guess_type(str(path))[0] or "image/png"
+            self.pending_images.append((path.name, media_type, data))
+            # Update visual indicator
+            self.query_one("#image-attachments", ImageAttachments).add_image(path.name)
+        except Exception as e:
+            self.notify(f"Failed to attach {path.name}: {e}", severity="error")
+
+    def on_image_attachments_removed(self, event: ImageAttachments.Removed) -> None:
+        """Handle removal of an image attachment."""
+        self.pending_images = [
+            (name, media, data) for name, media, data in self.pending_images
+            if name != event.filename
+        ]
+
+    def _build_message_with_images(self, prompt: str) -> dict[str, Any]:
+        """Build a message dict with text and any pending images."""
+        content: list[dict[str, Any]] = [{"type": "text", "text": prompt}]
+        for filename, media_type, data in self.pending_images:
+            content.append({
+                "type": "image",
+                "source": {"type": "base64", "media_type": media_type, "data": data}
+            })
+        self.pending_images.clear()
+        # Clear visual indicator
+        try:
+            self.query_one("#image-attachments", ImageAttachments).clear()
+        except Exception:
+            pass
+        return {
+            "type": "user",
+            "message": {"role": "user", "content": content},
+            "parent_tool_use_id": None,
+        }
 
     @asynccontextmanager
     async def _show_prompt(self, prompt):
@@ -230,6 +274,7 @@ class ChatApp(App):
             yield VerticalScroll(id="chat-view")
         yield TodoPanel(id="todo-panel", classes="hidden")
         with Horizontal(id="input-wrapper"):
+            yield ImageAttachments(id="image-attachments", classes="hidden")
             with Vertical(id="input-container"):
                 yield ChatInput(id="input")
                 yield TextAreaAutoComplete(
@@ -349,7 +394,13 @@ class ChatApp(App):
             self._handle_worktree_command(prompt.strip())
             return
 
-        user_msg = ChatMessage(prompt)
+        # Build display text with image indicators
+        display_text = prompt
+        if self.pending_images:
+            attachments = ", ".join(f"📎 {name}" for name, _, _ in self.pending_images)
+            display_text = f"{prompt}\n{attachments}"
+
+        user_msg = ChatMessage(display_text)
         user_msg.add_class("user-message")
         chat_view.mount(user_msg)
         self.call_after_refresh(chat_view.scroll_end, animate=False)
@@ -363,7 +414,12 @@ class ChatApp(App):
         if not self.client:
             return
 
-        await self.client.query(prompt)
+        # Send message with images if any are pending
+        if self.pending_images:
+            message = self._build_message_with_images(prompt)
+            await self.client._transport.write(json.dumps(message) + "\n")
+        else:
+            await self.client.query(prompt)
         had_tool_use: dict[str | None, bool] = {}
 
         async for message in self.client.receive_response():
@@ -835,6 +891,23 @@ class ChatApp(App):
         input_widgets = self.query("#input")
         if input_widgets:
             input_widgets.first(ChatInput).focus()
+
+    def on_paste(self, event) -> None:
+        """App-level paste handler - catches pastes when input isn't focused."""
+        # Skip if already handled by ChatInput (check if input is focused)
+        input_widgets = self.query("#input")
+        if input_widgets and self.focused == input_widgets.first(ChatInput):
+            return  # Let ChatInput handle it
+
+        # Use ChatInput's image detection logic
+        input_widget = input_widgets.first(ChatInput) if input_widgets else None
+        if input_widget:
+            images = input_widget._is_image_path(event.text)
+            if images:
+                for path in images:
+                    self._attach_image(path)
+                event.prevent_default()
+                event.stop()
 
     def on_key(self, event) -> None:
         if self.query(SelectionPrompt) or self.query(QuestionPrompt):

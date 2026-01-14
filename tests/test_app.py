@@ -1,8 +1,10 @@
 """End-to-end tests for cc-textual app."""
 
 import asyncio
+import base64
 import pytest
 from pathlib import Path
+from unittest.mock import MagicMock
 
 from claude_alamode import ChatApp
 from claude_alamode.widgets import ChatInput
@@ -73,3 +75,30 @@ async def test_write_permission_flow(tmp_path: Path):
 
         # File should still exist (rm was denied)
         assert file1.exists(), f"File {file1} should still exist (rm was denied)"
+
+
+def test_image_attachment_message_building():
+    """Test that images are correctly formatted in messages."""
+    app = ChatApp()
+
+    # Add a test image
+    test_data = base64.b64encode(b"fake image data").decode()
+    app.pending_images.append(("test.png", "image/png", test_data))
+
+    # Build message
+    msg = app._build_message_with_images("What is this?")
+
+    # Verify structure
+    assert msg["type"] == "user"
+    content = msg["message"]["content"]
+    assert len(content) == 2
+    assert content[0] == {"type": "text", "text": "What is this?"}
+    assert content[1]["type"] == "image"
+    assert content[1]["source"]["type"] == "base64"
+    assert content[1]["source"]["media_type"] == "image/png"
+    assert content[1]["source"]["data"] == test_data
+
+    # Should clear pending images
+    assert len(app.pending_images) == 0
+
+

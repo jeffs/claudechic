@@ -154,13 +154,41 @@ ToolUseWidget:hover .tool-copy-btn {
     color: $text-muted;
 }
 
+/* Image attachments indicator - shows above input */
+#image-attachments {
+    width: 100;
+    height: auto;
+    padding: 0 0;
+    align: left middle;
+}
+
+#image-attachments.hidden {
+    display: none;
+}
+
+#image-attachments .image-tag {
+    min-width: 10;
+    width: auto;
+    height: 1;
+    margin: 0 1 0 0;
+    padding: 0 1;
+    background: #444444;
+    color: #cccccc;
+    border: none;
+}
+
+#image-attachments .image-tag:hover {
+    background: #555555;
+    color: #ffffff;
+}
+
 /* Input wrapper for centering */
 #input-wrapper {
     dock: bottom;
     width: 100%;
     height: auto;
-    min-height: 3;
-    max-height: 12;
+    min-height: 5;
+    max-height: 14;
     align: center top;
 }
 
