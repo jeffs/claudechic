@@ -1049,8 +1049,14 @@ class ChatApp(App):
         sidebar.add_agent(agent.id, agent.name)
         self._switch_to_agent(agent.id)
         self._position_right_sidebar()
-        label = f"Worktree '{name}'" if worktree else f"Agent '{name}'"
-        self.notify(f"{label} ready")
+
+        if resume_id:
+            self._load_and_display_history(resume_id, cwd=cwd)
+            agent.session_id = resume_id
+            self.notify(f"Resumed session in '{name}'")
+        else:
+            label = f"Worktree '{name}'" if worktree else f"Agent '{name}'"
+            self.notify(f"{label} ready")
 
     def _close_agent(self, target: str | None) -> None:
         """Close an agent by name, position, or current if no target."""
