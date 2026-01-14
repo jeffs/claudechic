@@ -1,5 +1,7 @@
 """Agent sidebar widget for multi-agent management."""
 
+from pathlib import Path
+
 from textual.app import ComposeResult
 from textual.events import Click
 from textual.message import Message
@@ -7,6 +9,47 @@ from textual.reactive import reactive
 from textual.widget import Widget
 from textual.widgets import Static
 from rich.text import Text
+
+
+class WorktreeItem(Widget):
+    """A ghost worktree in the sidebar (not yet an agent)."""
+
+    class Selected(Message):
+        """Posted when worktree is clicked."""
+        def __init__(self, branch: str, path: Path) -> None:
+            self.branch = branch
+            self.path = path
+            super().__init__()
+
+    DEFAULT_CSS = """
+    WorktreeItem {
+        height: 3;
+        padding: 1 1;
+        border-left: tall transparent;
+        layout: horizontal;
+    }
+    WorktreeItem:hover {
+        background: #222222;
+    }
+    WorktreeItem .worktree-label {
+        width: 1fr;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        color: #555555;
+    }
+    """
+
+    def __init__(self, branch: str, path: Path) -> None:
+        super().__init__()
+        self.branch = branch
+        self.path = path
+
+    def compose(self) -> ComposeResult:
+        label = Text.assemble(("◌", "#444444"), " ", (self.branch, "#555555"))
+        yield Static(label, classes="worktree-label")
+
+    def on_click(self) -> None:
+        self.post_message(self.Selected(self.branch, self.path))
 
 
 class AgentItem(Widget):
@@ -119,6 +162,7 @@ class AgentSidebar(Widget):
     def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
         self._agents: dict[str, AgentItem] = {}
+        self._worktrees: dict[str, WorktreeItem] = {}  # branch -> item
 
     def compose(self) -> ComposeResult:
         yield Static("Agents", classes="sidebar-title")
@@ -127,6 +171,10 @@ class AgentSidebar(Widget):
         """Add an agent to the sidebar."""
         if agent_id in self._agents:
             return
+        # Remove ghost worktree if there's one for this name
+        if name in self._worktrees:
+            self._worktrees[name].remove()
+            del self._worktrees[name]
         item = AgentItem(agent_id, name, status)
         item.id = f"agent-{agent_id}"
         self._agents[agent_id] = item
@@ -150,3 +198,22 @@ class AgentSidebar(Widget):
         """Update an agent's status."""
         if agent_id in self._agents:
             self._agents[agent_id].status = status
+
+    def add_worktree(self, branch: str, path: Path) -> None:
+        """Add a ghost worktree to the sidebar."""
+        # Skip if already have an agent with this name
+        for agent_item in self._agents.values():
+            if agent_item.display_name == branch:
+                return
+        if branch in self._worktrees:
+            return
+        item = WorktreeItem(branch, path)
+        item.id = f"worktree-{branch}"
+        self._worktrees[branch] = item
+        self.mount(item)
+
+    def remove_worktree(self, branch: str) -> None:
+        """Remove a ghost worktree from the sidebar."""
+        if branch in self._worktrees:
+            self._worktrees[branch].remove()
+            del self._worktrees[branch]

@@ -72,6 +72,7 @@ from claude_alamode.widgets import (
     TextAreaAutoComplete,
     AgentSidebar,
     AgentItem,
+    WorktreeItem,
     AutoHideScroll,
 )
 from claude_alamode.widgets.footer import StatusFooter
@@ -418,6 +419,9 @@ class ChatApp(App):
         sidebar.add_agent(agent.id, agent.name)
         sidebar.set_active(agent.id)
 
+        # Populate ghost worktrees (feature branches only)
+        self._populate_worktrees()
+
         # Create client with resume if provided (avoids double client creation)
         resume = self._resume_on_start
         agent.client = ClaudeSDKClient(self._make_options(resume=resume))
@@ -735,8 +739,9 @@ class ChatApp(App):
         """Show/hide right sidebar based on terminal width and content."""
         sidebar = self.query_one("#right-sidebar", Vertical)
         panel = self.query_one("#todo-panel", TodoPanel)
-        # Show sidebar when wide enough and we have multiple agents or todos
-        has_content = len(self.agents) > 1 or panel.todos
+        agent_sidebar = self.query_one("#agent-sidebar", AgentSidebar)
+        # Show sidebar when wide enough and we have multiple agents, worktrees, or todos
+        has_content = len(self.agents) > 1 or agent_sidebar._worktrees or panel.todos
         if self.size.width >= self.SIDEBAR_MIN_WIDTH and has_content:
             sidebar.remove_class("hidden")
             # Show/hide todo panel based on whether it has content
@@ -930,6 +935,26 @@ class ChatApp(App):
         if event.agent_id == self.active_agent_id:
             return
         self._switch_to_agent(event.agent_id)
+
+    def on_worktree_item_selected(self, event: WorktreeItem.Selected) -> None:
+        """Handle ghost worktree selection - create an agent there."""
+        self._create_new_agent(event.branch, event.path, worktree=event.branch, auto_resume=True)
+
+    def _populate_worktrees(self) -> None:
+        """Populate sidebar with ghost worktrees for feature branches."""
+        try:
+            worktrees = list_worktrees()
+        except Exception:
+            return  # Not a git repo or git not available
+        sidebar = self.query_one("#agent-sidebar", AgentSidebar)
+        # Get names of existing agents to skip
+        agent_names = {a.name for a in self.agents.values()}
+        for wt in worktrees:
+            if wt.is_main:
+                continue  # Skip main worktree
+            if wt.branch in agent_names:
+                continue  # Already have an agent
+            sidebar.add_worktree(wt.branch, wt.path)
 
     def on_agent_item_close_requested(self, event: AgentItem.CloseRequested) -> None:
         """Handle close button click on agent item."""
