@@ -1031,7 +1031,8 @@ class ChatApp(App):
         with self.suspend():
             import subprocess
             env = {k: v for k, v in os.environ.items() if k != "VIRTUAL_ENV"}
-            subprocess.run(cmd, shell=True, cwd=cwd, env=env)
+            shell = os.environ.get("SHELL", "/bin/sh")
+            subprocess.run([shell, "-ic", cmd], cwd=cwd, env=env)
 
     def _handle_agent_command(self, command: str) -> None:
         """Handle /agent commands."""
