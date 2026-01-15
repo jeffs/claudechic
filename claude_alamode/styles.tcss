@@ -290,6 +290,20 @@ Markdown {
     margin: 0;
 }
 
+/* Markdown overrides - neutral headers, brighter code blocks */
+MarkdownH1, MarkdownH2, MarkdownH3 {
+    color: $text;
+    text-style: bold;
+}
+
+MarkdownTableContent > .header {
+    color: $text;
+}
+
+MarkdownFence {
+    background: $surface;
+}
+
 /* Remove bottom margin from last element in markdown containers */
 ChatMessage MarkdownParagraph:last-of-type,
 ChatMessage MarkdownFence:last-of-type,

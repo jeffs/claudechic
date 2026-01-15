@@ -389,7 +389,7 @@ class ChatApp(App):
             pass  # Footer may not be mounted yet
 
     # Built-in slash commands (local to this app)
-    LOCAL_COMMANDS = ["/clear", "/resume", "/worktree", "/worktree finish", "/worktree cleanup", "/agent", "/agent close", "/shell"]
+    LOCAL_COMMANDS = ["/clear", "/resume", "/worktree", "/worktree finish", "/worktree cleanup", "/agent", "/agent close", "/shell", "/theme"]
 
     def compose(self) -> ComposeResult:
         with Horizontal(id="main"):
@@ -572,6 +572,10 @@ class ChatApp(App):
 
         if prompt.strip().startswith("/shell"):
             self._handle_shell_command(prompt.strip())
+            return
+
+        if prompt.strip() == "/theme":
+            self.action_command_palette()
             return
 
         # Mount user message
