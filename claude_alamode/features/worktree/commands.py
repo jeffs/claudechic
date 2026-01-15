@@ -271,12 +271,14 @@ def _finish_complete(app: "ChatApp", agent: "AgentSession", warning: str = "") -
         None
     )
     if worktree_agent and len(app.agents) > 1:
-        main_agent = next(
-            (a for a in app.agents.values() if a.worktree is None),
-            None
-        )
-        if main_agent:
-            app._switch_to_agent(main_agent.id)
+        # Only switch away if user is still on the agent being closed
+        if app.active_agent_id == worktree_agent.id:
+            main_agent = next(
+                (a for a in app.agents.values() if a.worktree is None),
+                None
+            )
+            if main_agent:
+                app._switch_to_agent(main_agent.id)
         app._do_close_agent(worktree_agent.id)
 
 
