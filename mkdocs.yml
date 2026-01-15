@@ -1,0 +1,26 @@
+site_name: Claude à la Mode
+site_description: A stylish terminal UI for Claude Code
+
+nav:
+  - Home: index.md
+  - Multi-Agent: agents.md
+  - Building: architecture.md
+
+theme:
+  name: material
+  features:
+    - content.code.copy
+    - content.tabs.link
+
+extra_css:
+  - stylesheets/extra.css
+
+markdown_extensions:
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.superfences
+  - pymdownx.inlinehilite
+  - admonition
+  - pymdownx.details
+  - attr_list
+  - md_in_html
