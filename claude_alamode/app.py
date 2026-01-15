@@ -95,6 +95,7 @@ class ChatApp(App):
         Binding("ctrl+y", "copy_selection", "Copy", priority=True, show=False),
         Binding("ctrl+c", "quit", "Quit", priority=True, show=False),
         Binding("ctrl+l", "clear", "Clear", show=False),
+        Binding("ctrl+s", "screenshot", "Screenshot", show=False),
         Binding("shift+tab", "cycle_permission_mode", "Auto-edit", priority=True, show=False),
         Binding("escape", "escape", "Cancel", show=False),
         Binding("ctrl+n", "new_agent", "New Agent", priority=True, show=False),
