@@ -82,6 +82,9 @@ from claude_alamode.errors import log_exception, setup_logging
 
 log = logging.getLogger(__name__)
 
+# Chunk batching interval in seconds (16ms for responsive feel)
+CHUNK_BATCH_INTERVAL = 0.016
+
 
 def _scroll_if_at_bottom(scroll_view: VerticalScroll) -> None:
     """Scroll to end only if user hasn't scrolled up."""
@@ -135,6 +138,9 @@ class ChatApp(App):
         self.pending_images: list[tuple[str, str, str, str]] = []  # (path, filename, media_type, base64_data)
         # File index for fuzzy file search
         self.file_index: FileIndex | None = None
+        # Chunk batching: buffer text by (agent_id, parent_tool_use_id)
+        self._chunk_buffer: dict[tuple[str | None, str | None], tuple[str, bool]] = {}  # key -> (text, new_message)
+        self._chunk_flush_timer: asyncio.TimerHandle | None = None
 
     # Properties to access active agent's state (backward compatibility)
     @property
@@ -637,9 +643,7 @@ class ChatApp(App):
                     for block in message.content:
                         if isinstance(block, TextBlock):
                             new_msg = had_tool_use.get(parent_id, False)
-                            self.post_message(
-                                StreamChunk(block.text, new_message=new_msg, parent_tool_use_id=parent_id, agent_id=agent_id)
-                            )
+                            self._buffer_chunk(block.text, new_msg, parent_id, agent_id)
                             had_tool_use[parent_id] = False
                         elif isinstance(block, ToolUseBlock):
                             self.post_message(ToolUseMessage(block, parent_tool_use_id=parent_id, agent_id=agent_id))
@@ -654,7 +658,7 @@ class ChatApp(App):
                     # (the second is <local-command-stdout>Compacted</local-command-stdout>)
                     if awaiting_compact_summary and isinstance(content, str) and not content.startswith("<"):
                         awaiting_compact_summary = False
-                        self.post_message(StreamChunk(content, agent_id=agent_id))
+                        self._buffer_chunk(content, False, None, agent_id)
                     elif isinstance(content, list):
                         # UserMessage contains tool results as a list of ToolResultBlock
                         for block in content:
@@ -692,6 +696,29 @@ class ChatApp(App):
                     ind.remove()
         except Exception:
             pass  # OK to fail during shutdown
+
+    def _buffer_chunk(
+        self, text: str, new_message: bool, parent_tool_use_id: str | None, agent_id: str | None
+    ) -> None:
+        """Buffer a chunk for batched posting."""
+        key = (agent_id, parent_tool_use_id)
+        if key in self._chunk_buffer:
+            existing_text, existing_new = self._chunk_buffer[key]
+            # Keep new_message=True if either had it
+            self._chunk_buffer[key] = (existing_text + text, existing_new or new_message)
+        else:
+            self._chunk_buffer[key] = (text, new_message)
+        # Schedule flush if not already scheduled
+        if self._chunk_flush_timer is None:
+            loop = asyncio.get_running_loop()
+            self._chunk_flush_timer = loop.call_later(CHUNK_BATCH_INTERVAL, self._flush_chunk_buffer)
+
+    def _flush_chunk_buffer(self) -> None:
+        """Flush all buffered chunks as StreamChunk messages."""
+        self._chunk_flush_timer = None
+        for (agent_id, parent_tool_use_id), (text, new_message) in self._chunk_buffer.items():
+            self.post_message(StreamChunk(text, new_message=new_message, parent_tool_use_id=parent_tool_use_id, agent_id=agent_id))
+        self._chunk_buffer.clear()
 
     def on_stream_chunk(self, event: StreamChunk) -> None:
         self._hide_thinking(event.agent_id)
@@ -806,6 +833,8 @@ class ChatApp(App):
             sidebar.add_class("hidden")
 
     def on_response_complete(self, event: ResponseComplete) -> None:
+        # Flush any remaining buffered chunks before completing
+        self._flush_chunk_buffer()
         self._hide_thinking()
         agent = self._get_agent(event.agent_id)
         self._set_agent_status("idle", event.agent_id)
