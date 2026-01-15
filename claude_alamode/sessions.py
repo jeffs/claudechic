@@ -1,6 +1,7 @@
 """Session management - loading and listing Claude Code sessions."""
 
 import json
+import os
 import re
 from pathlib import Path
 
@@ -175,26 +176,37 @@ async def get_context_from_session(
     if not session_file.exists():
         return None
 
-    last_usage = None
+    # Read from end of file to find last usage entry efficiently
+    # This avoids reading entire file which can be megabytes for long sessions
     try:
-        async with aiofiles.open(session_file) as f:
-            async for line in f:
-                try:
-                    data = json.loads(line)
-                    if "message" in data and isinstance(data["message"], dict):
-                        usage = data["message"].get("usage")
-                        if usage:
-                            last_usage = usage
-                except json.JSONDecodeError:
-                    continue
-    except IOError:
+        file_size = os.path.getsize(session_file)
+        if file_size == 0:
+            return None
+
+        # Read last chunk (usually enough to find last usage)
+        chunk_size = min(32768, file_size)  # 32KB chunk
+        async with aiofiles.open(session_file, mode='rb') as f:
+            await f.seek(file_size - chunk_size)
+            chunk = await f.read()
+
+        # Split into lines, process in reverse
+        lines = chunk.split(b'\n')
+        for line in reversed(lines):
+            if not line.strip():
+                continue
+            try:
+                data = json.loads(line)
+                if "message" in data and isinstance(data["message"], dict):
+                    usage = data["message"].get("usage")
+                    if usage:
+                        return (
+                            usage.get("input_tokens", 0)
+                            + usage.get("cache_creation_input_tokens", 0)
+                            + usage.get("cache_read_input_tokens", 0)
+                        )
+            except json.JSONDecodeError:
+                continue
+    except (IOError, OSError):
         return None
 
-    if not last_usage:
-        return None
-
-    return (
-        last_usage.get("input_tokens", 0)
-        + last_usage.get("cache_creation_input_tokens", 0)
-        + last_usage.get("cache_read_input_tokens", 0)
-    )
+    return None
