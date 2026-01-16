@@ -175,6 +175,34 @@
   padding-left: 1em;
 }
 
+/* User messages - orange accent (matching app's user message style) */
+.md-typeset .admonition.user,
+.md-typeset details.user {
+  border-left-color: #cc7700;
+  background-color: #0a0a0a;
+}
+
+.md-typeset .admonition.user > .admonition-title,
+.md-typeset details.user > summary {
+  color: #cc7700;
+  font-weight: 500;
+  padding-left: 0;
+}
+
+/* Claude messages - blue-gray accent (matching app's assistant message style) */
+.md-typeset .admonition.claude,
+.md-typeset details.claude {
+  border-left-color: #557799;
+  background-color: #0a0a0a;
+}
+
+.md-typeset .admonition.claude > .admonition-title,
+.md-typeset details.claude > summary {
+  color: #88aacc;
+  font-weight: 500;
+  padding-left: 0;
+}
+
 /* Hide the chevron/marker on details */
 .md-typeset details summary::after {
   display: none;

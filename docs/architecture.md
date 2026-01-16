@@ -40,11 +40,11 @@ The only reason Claude Chic looks good is because Textual makes it really easy t
 
 And now, as a result, it's very easy to screw around and play with new terminal interfaces for Claude.
 
--  Want to expand tool uses by clicking on them?  Sure!
+-  Want to click on tool uses to expand them?  Sure!
 -  Want to center content on the screen?  Sure!
 -  Want to add a TODO list sidebar?  Sure!
--  Want to add a timeseries of context usage?  Sure!
+-  Want to design your own automatic compact logic?  Sure!
 -  Want Bash tool uses to pop out a new terminal to run the command yourself if you click on it?  Sure!
 -  Want to rebuild the whole thing in React + Electron?  Sure!
 
-It's pretty trivial to add features to Claude Chic, or to build your own version.   Please enjoy playing with code.
+It's trivial to add features to Claude Chic, or to build your own version.   Please enjoy playing with code.
