@@ -55,6 +55,7 @@ async def test_path_autocomplete(mock_sdk, tmp_path: Path):
     async with app.run_test(size=(80, 24)) as pilot:
         autocomplete = app.query_one(TextAreaAutoComplete)
         # Override app's file index to use test files
+        assert app.file_index is not None
         app.file_index.files = ["file1.txt", "file2.txt", "subdir/other.py"]
 
         input_widget = app.query_one(ChatInput)

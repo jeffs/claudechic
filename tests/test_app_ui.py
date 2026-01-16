@@ -27,6 +27,7 @@ async def test_auto_edit_toggle(mock_sdk):
     """Shift+Tab toggles auto-edit mode for current agent."""
     app = ChatApp()
     async with app.run_test() as pilot:
+        assert app._agent is not None
         assert not app._agent.auto_approve_edits
 
         await pilot.press("shift+tab")
@@ -54,6 +55,7 @@ async def test_clear_command(mock_sdk):
     app = ChatApp()
     async with app.run_test() as pilot:
         chat_view = app._chat_view
+        assert chat_view is not None
 
         # Add some fake messages
         msg1 = ChatMessage("Test 1")
@@ -255,6 +257,7 @@ async def test_stream_chunk_creates_message(mock_sdk):
     app = ChatApp()
     async with app.run_test() as pilot:
         chat_view = app._chat_view
+        assert chat_view is not None
 
         # Post a stream chunk
         agent_id = app.active_agent_id
@@ -273,6 +276,7 @@ async def test_stream_chunk_appends_to_message(mock_sdk):
     app = ChatApp()
     async with app.run_test() as pilot:
         chat_view = app._chat_view
+        assert chat_view is not None
         agent_id = app.active_agent_id
 
         app.post_message(StreamChunk("Hello ", new_message=True, agent_id=agent_id))
@@ -291,6 +295,7 @@ async def test_stream_chunks_interleaved_with_tools(mock_sdk):
     app = ChatApp()
     async with app.run_test() as pilot:
         chat_view = app._chat_view
+        assert chat_view is not None
         agent_id = app.active_agent_id
 
         # First text chunk
@@ -367,6 +372,7 @@ async def test_command_output_displays(mock_sdk):
     app = ChatApp()
     async with app.run_test() as pilot:
         chat_view = app._chat_view
+        assert chat_view is not None
 
         # Post a command output message
         agent_id = app.active_agent_id
@@ -403,6 +409,7 @@ async def test_context_report_displays(mock_sdk):
     app = ChatApp()
     async with app.run_test() as pilot:
         chat_view = app._chat_view
+        assert chat_view is not None
 
         agent_id = app.active_agent_id
         app.post_message(CommandOutputMessage(CONTEXT_OUTPUT, agent_id=agent_id))
@@ -427,6 +434,7 @@ async def test_system_notification_shows_in_chat(mock_sdk):
     app = ChatApp()
     async with app.run_test() as pilot:
         chat_view = app._chat_view
+        assert chat_view is not None
 
         # Create a system message (simulating SDK)
         sdk_msg = SystemMessage(
@@ -454,6 +462,7 @@ async def test_system_notification_api_error(mock_sdk):
     app = ChatApp()
     async with app.run_test() as pilot:
         chat_view = app._chat_view
+        assert chat_view is not None
 
         # Create an api_error system message
         sdk_msg = SystemMessage(
@@ -485,6 +494,7 @@ async def test_system_notification_compact_boundary(mock_sdk):
     app = ChatApp()
     async with app.run_test() as pilot:
         chat_view = app._chat_view
+        assert chat_view is not None
 
         sdk_msg = SystemMessage(
             subtype="compact_boundary",
@@ -509,6 +519,7 @@ async def test_system_notification_ignored_subtypes(mock_sdk):
     app = ChatApp()
     async with app.run_test() as pilot:
         chat_view = app._chat_view
+        assert chat_view is not None
 
         # These subtypes should not create widgets
         for subtype in ["stop_hook_summary", "turn_duration", "local_command"]:

@@ -249,12 +249,14 @@ async def test_context_bar_rendering():
         bar.tokens = 10000
         bar.max_tokens = 200000
         rendered = bar.render()
-        assert "5%" in rendered.plain  # 10k/200k = 5%
+        assert hasattr(rendered, "plain")
+        assert "5%" in rendered.plain  # type: ignore[union-attr]
 
         # High usage - should be red
         bar.tokens = 180000
         rendered = bar.render()
-        assert "90%" in rendered.plain
+        assert hasattr(rendered, "plain")
+        assert "90%" in rendered.plain  # type: ignore[union-attr]
 
 
 @pytest.mark.asyncio
@@ -288,10 +290,14 @@ async def test_status_footer_auto_edit():
 
         footer.auto_edit = False
         label = footer.query_one("#auto-edit-label", Static)
-        assert "off" in label.render().plain.lower()
+        rendered = label.render()
+        assert hasattr(rendered, "plain")
+        assert "off" in rendered.plain.lower()  # type: ignore[union-attr]
 
         footer.auto_edit = True
-        assert "on" in label.render().plain.lower()
+        rendered = label.render()
+        assert hasattr(rendered, "plain")
+        assert "on" in rendered.plain.lower()  # type: ignore[union-attr]
 
 
 @pytest.mark.asyncio
