@@ -235,6 +235,68 @@ class Agent:
                 pass
             self.client = None
 
+    async def load_history(self, limit: int = 50, cwd: Path | None = None) -> None:
+        """Load message history from session file into self.messages.
+
+        This populates Agent.messages from the persisted session,
+        making Agent.messages the single source of truth for history.
+        Call ChatView._render_full() after this to update UI.
+
+        Args:
+            limit: Maximum number of messages to load
+            cwd: Working directory for session lookup (defaults to self.cwd)
+        """
+        from claudechic.sessions import load_session_messages
+
+        if not self.session_id:
+            return
+
+        self.messages.clear()
+        raw_messages = await load_session_messages(
+            self.session_id, limit=limit, cwd=cwd or self.cwd
+        )
+
+        current_assistant: AssistantContent | None = None
+
+        for m in raw_messages:
+            if m["type"] == "user":
+                # Flush any pending assistant content
+                if current_assistant is not None:
+                    self.messages.append(
+                        ChatItem(role="assistant", content=current_assistant)
+                    )
+                    current_assistant = None
+                # Add user message
+                self.messages.append(
+                    ChatItem(role="user", content=UserContent(text=m["content"]))
+                )
+            elif m["type"] == "assistant":
+                # Start or continue assistant content
+                if current_assistant is None:
+                    current_assistant = AssistantContent(text=m["content"])
+                else:
+                    # Append to existing (shouldn't happen often with current parser)
+                    current_assistant.text += "\n" + m["content"]
+            elif m["type"] == "tool_use":
+                # Add tool use to current assistant content
+                if current_assistant is None:
+                    current_assistant = AssistantContent()
+                current_assistant.tool_uses.append(
+                    ToolUse(
+                        id=m.get("id", ""),
+                        name=m["name"],
+                        input=m.get("input", {}),
+                    )
+                )
+
+        # Flush final assistant content
+        if current_assistant is not None:
+            self.messages.append(
+                ChatItem(role="assistant", content=current_assistant)
+            )
+
+        log.info(f"Loaded {len(self.messages)} messages from session {self.session_id}")
+
     # -----------------------------------------------------------------------
     # Sending messages
     # -----------------------------------------------------------------------

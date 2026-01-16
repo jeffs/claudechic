@@ -40,7 +40,6 @@ from claudechic.messages import (
 from claudechic.sessions import (
     get_context_from_session,
     get_recent_sessions,
-    load_session_messages,
 )
 from claudechic.features.worktree import (
     handle_worktree_command,
@@ -59,7 +58,6 @@ from claudechic.widgets import (
     ChatInput,
     ImageAttachments,
     ErrorMessage,
-    ToolUseWidget,
     AgentToolWidget,
     TodoWidget,
     TodoPanel,
@@ -503,26 +501,22 @@ class ChatApp(App):
             await self.file_index.refresh()
 
     async def _load_and_display_history(self, session_id: str, cwd: Path | None = None) -> None:
-        """Load session history and display in chat view."""
-        chat_view = self._chat_view
-        if not chat_view:
+        """Load session history into agent and render in chat view.
+
+        This uses Agent.messages as the single source of truth.
+        """
+        agent = self._agent
+        if not agent:
             return
-        chat_view.remove_children()
-        messages = await load_session_messages(session_id, limit=50, cwd=cwd)
-        for m in messages:
-            if m["type"] == "user":
-                msg = ChatMessage(m["content"])
-                msg.add_class("user-message")
-                chat_view.mount(msg)
-            elif m["type"] == "assistant":
-                msg = ChatMessage(m["content"])
-                msg.add_class("assistant-message")
-                chat_view.mount(msg)
-            elif m["type"] == "tool_use":
-                block = ToolUseBlock(id=m.get("id", ""), name=m["name"], input=m["input"])
-                widget = ToolUseWidget(block, collapsed=True, completed=True)
-                chat_view.mount(widget)
-        self.call_after_refresh(_scroll_if_at_bottom, chat_view)
+
+        # Set session_id and load history
+        agent.session_id = session_id
+        await agent.load_history(limit=50, cwd=cwd)
+
+        # Re-render ChatView from Agent.messages
+        if agent.chat_view:
+            agent.chat_view._render_full()
+            self.call_after_refresh(_scroll_if_at_bottom, agent.chat_view)
 
     @work(group="refresh_context", exclusive=True)
     async def refresh_context(self) -> None:
