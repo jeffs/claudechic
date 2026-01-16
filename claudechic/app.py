@@ -768,11 +768,14 @@ class ChatApp(App):
 
     @profile
     def on_stream_chunk(self, event: StreamChunk) -> None:
-        with timed("on_stream_chunk.hide_thinking"):
-            self._hide_thinking(event.agent_id)
         agent = self._get_agent(event.agent_id)
         if not agent:
             return
+
+        # Only hide thinking once per response (avoid 252 redundant calls)
+        if not agent._thinking_hidden:
+            self._hide_thinking(event.agent_id)
+            agent._thinking_hidden = True
 
         if event.parent_tool_use_id and event.parent_tool_use_id in agent.active_task_widgets:
             task = agent.active_task_widgets[event.parent_tool_use_id]

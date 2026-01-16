@@ -134,6 +134,7 @@ class Agent:
         self.active_tasks: dict[str, str] = {}  # task_id -> accumulated text
         self.response_had_tools: bool = False
         self._needs_new_message: bool = True  # Start new ChatMessage on next text
+        self._thinking_hidden: bool = False  # Track if thinking indicator was hidden this response
 
         # Per-agent state
         self.pending_images: list[tuple[str, str, str, str]] = []  # (path, filename, media_type, base64)
@@ -261,6 +262,7 @@ class Agent:
         self._current_assistant = None
         self._current_text_buffer = ""
         self._needs_new_message = True
+        self._thinking_hidden = False  # Reset for new response
 
         # Start response processing
         self._response_task = asyncio.create_task(

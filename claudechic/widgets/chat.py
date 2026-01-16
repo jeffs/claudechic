@@ -44,7 +44,8 @@ class Spinner(Static):
     @profile
     def _tick(self) -> None:
         self._frame = (self._frame + 1) % len(self.FRAMES)
-        self.update(f"{self.FRAMES[self._frame]}{self._text}", layout=False)
+        with timed("Spinner._tick.update"):
+            self.update(f"{self.FRAMES[self._frame]}{self._text}", layout=False)
 
 
 class ThinkingIndicator(Spinner):
