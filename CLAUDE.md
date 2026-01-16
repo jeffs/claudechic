@@ -23,6 +23,7 @@ claude_alamode/
 ├── errors.py          # Logging infrastructure, error handling
 ├── file_index.py      # Fuzzy file search using git ls-files
 ├── formatting.py      # Tool formatting, diff rendering (pure functions)
+├── history.py         # Global history loading from ~/.claude/history.jsonl
 ├── mcp.py             # In-process MCP server for agent control tools
 ├── messages.py        # Custom Textual Message types for SDK events
 ├── permissions.py     # PermissionRequest dataclass for tool approval
@@ -43,6 +44,7 @@ claude_alamode/
     ├── chat.py        # ChatMessage, ChatInput, ThinkingIndicator
     ├── diff.py        # Syntax-highlighted diff widget
     ├── footer.py      # Custom footer with git branch, CPU/context bars
+    ├── history_search.py # Reverse history search widget (Ctrl+R)
     ├── indicators.py  # CPUBar, ContextBar resource monitors
     ├── prompts.py     # SelectionPrompt, QuestionPrompt, SessionItem
     ├── scroll.py      # AutoHideScroll - auto-hiding scrollbar container
@@ -160,6 +162,7 @@ async for message in client.receive_response():
 - Enter: Send message
 - Ctrl+C (x2): Quit
 - Ctrl+L: Clear chat (UI only)
+- Ctrl+R: Reverse history search
 - Shift+Tab: Toggle auto-edit mode
 - Ctrl+N: New agent (hint)
 - Ctrl+1-9: Switch to agent by position

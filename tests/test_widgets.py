@@ -322,3 +322,45 @@ async def test_thinking_indicator_animates():
         await pilot.pause(0.2)
         # Frame should have changed
         assert indicator.frame != initial_frame or indicator.frame == 0  # May wrap
+
+
+@pytest.mark.asyncio
+async def test_history_search_filters():
+    """HistorySearch filters history and cycles through matches."""
+    from claude_alamode.widgets.history_search import HistorySearch
+    from unittest.mock import patch
+
+    class TestApp(App):
+        def compose(self):
+            yield HistorySearch(id="history")
+
+    # Mock history data (most recent first)
+    mock_history = ["fix the bug", "add new feature", "fix another bug", "refactor code"]
+
+    with patch("claude_alamode.widgets.history_search.load_global_history", return_value=mock_history):
+        app = TestApp()
+        async with app.run_test() as pilot:
+            hs = app.query_one(HistorySearch)
+            hs.show()
+            await pilot.pause()
+
+            # Initially shows most recent match
+            assert hs._current_match() == "fix the bug"
+
+            # Type to filter
+            from textual.widgets import Input
+            inp = hs.query_one("#search-input", Input)
+            inp.value = "fix"
+            hs.on_input_changed(Input.Changed(inp, "fix"))
+
+            # Should filter to matching entries
+            assert len(hs._filtered) == 2
+            assert hs._current_match() == "fix the bug"
+
+            # Ctrl+R cycles to next match
+            hs.action_next_match()
+            assert hs._current_match() == "fix another bug"
+
+            # Up goes back
+            hs.action_prev_match()
+            assert hs._current_match() == "fix the bug"

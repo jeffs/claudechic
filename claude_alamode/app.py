@@ -56,6 +56,7 @@ from claude_alamode.agent import Agent, ToolUse
 from claude_alamode.agent_manager import AgentManager
 from claude_alamode.mcp import set_app, create_alamode_server
 from claude_alamode.file_index import FileIndex
+from claude_alamode.history import append_to_history
 from claude_alamode.widgets import (
     ContextBar,
     ChatMessage,
@@ -73,6 +74,7 @@ from claude_alamode.widgets import (
     QuestionPrompt,
     SessionItem,
     TextAreaAutoComplete,
+    HistorySearch,
     AgentSidebar,
     AgentItem,
     WorktreeItem,
@@ -106,6 +108,7 @@ class ChatApp(App):
         Binding("shift+tab", "cycle_permission_mode", "Auto-edit", priority=True, show=False),
         Binding("escape", "escape", "Cancel", show=False),
         Binding("ctrl+n", "new_agent", "New Agent", priority=True, show=False),
+        Binding("ctrl+r", "history_search", "History", priority=True, show=False),
         # Agent switching: ctrl+1 through ctrl+9
         *[Binding(f"ctrl+{i}", f"switch_agent({i})", f"Agent {i}", priority=True, show=False) for i in range(1, 10)],
     ]
@@ -484,6 +487,7 @@ class ChatApp(App):
         with Horizontal(id="input-wrapper"):
             with Vertical(id="input-container"):
                 yield ImageAttachments(id="image-attachments", classes="hidden")
+                yield HistorySearch(id="history-search")
                 yield ChatInput(id="input")
                 yield TextAreaAutoComplete(
                     "#input",
@@ -654,6 +658,11 @@ class ChatApp(App):
         chat_view = self._chat_view
         if not chat_view:
             return
+
+        # Append to global history
+        agent = self._agent
+        if agent:
+            append_to_history(prompt, agent.cwd, agent.session_id or agent.id)
 
         if prompt.strip() == "/clear":
             chat_view.remove_children()
@@ -920,6 +929,24 @@ class ChatApp(App):
         agent_ids = list(self.agents.keys())
         if 0 < position <= len(agent_ids):
             self._switch_to_agent(agent_ids[position - 1])
+
+    def action_history_search(self) -> None:
+        """Open reverse history search, or cycle if already open."""
+        hs = self.query_one("#history-search", HistorySearch)
+        if hs.display:
+            hs.action_next_match()
+        else:
+            hs.show()
+
+    def on_history_search_selected(self, event: HistorySearch.Selected) -> None:
+        """Handle history selection - populate input."""
+        self.chat_input.text = event.text
+        self.chat_input.move_cursor(self.chat_input.document.end)
+        self.chat_input.focus()
+
+    def on_history_search_cancelled(self, event: HistorySearch.Cancelled) -> None:
+        """Handle history search cancellation."""
+        self.chat_input.focus()
 
     def on_mouse_up(self, event: MouseUp) -> None:
         self.set_timer(0.05, self._check_and_copy_selection)
