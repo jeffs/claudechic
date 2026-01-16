@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING
 from textual.containers import VerticalScroll
 
 from claudechic.agent import Agent, ChatItem, UserContent, AssistantContent, ToolUse
-from claudechic.widgets.chat import ChatMessage, ChatAttachment, ThinkingIndicator
+from claudechic.widgets.chat import ChatMessage, ChatAttachment
 from claudechic.widgets.tools import ToolUseWidget, TaskWidget, AgentToolWidget
 
 if TYPE_CHECKING:
@@ -34,7 +34,6 @@ class ChatView(VerticalScroll):
         self._rendered_count = 0  # Number of messages rendered
         self._current_assistant_widget: ChatMessage | None = None
         self._tool_widgets: dict[str, ToolUseWidget | TaskWidget | AgentToolWidget] = {}
-        self._tailing = True  # Whether to auto-scroll on new content
 
     def set_agent(self, agent: Agent | None) -> None:
         """Set the agent to render. Triggers full re-render."""
@@ -57,7 +56,7 @@ class ChatView(VerticalScroll):
             self._render_item(item)
 
         self._rendered_count = len(self._agent.messages)
-        self._scroll_to_end()
+        self.scroll_end(animate=False)
 
     def _render_item(self, item: ChatItem) -> None:
         """Render a single chat item."""
@@ -139,7 +138,7 @@ class ChatView(VerticalScroll):
             if isinstance(content, AssistantContent):
                 self._update_current_assistant(content)
 
-        self._scroll_to_end()
+        self.scroll_end(animate=False)
 
     def _update_current_assistant(self, content: AssistantContent) -> None:
         """Update the current assistant message widget."""
@@ -161,25 +160,12 @@ class ChatView(VerticalScroll):
                     widget.set_result(result)
 
     def show_thinking(self) -> None:
-        """Show the thinking indicator."""
-        if not self.query(ThinkingIndicator):
-            self.mount(ThinkingIndicator())
-            self._scroll_to_end()
+        """Show the thinking indicator (now handled at app level)."""
+        pass
 
     def hide_thinking(self) -> None:
-        """Hide the thinking indicator."""
-        for ind in self.query(ThinkingIndicator):
-            ind.remove()
-
-    def on_scroll(self, _event) -> None:
-        """Track whether user is at bottom (tailing mode)."""
-        # Small buffer to account for rendering timing
-        self._tailing = self.scroll_y >= self.max_scroll_y - 50
-
-    def _scroll_to_end(self) -> None:
-        """Scroll to end if in tailing mode."""
-        if self._tailing:
-            self.scroll_end(animate=False)
+        """Hide the thinking indicator (now handled at app level)."""
+        pass
 
 
 def _make_tool_block(tool: ToolUse) -> "ToolUseBlock":
