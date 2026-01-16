@@ -23,6 +23,9 @@ from claudechic.profiling import profile
 
 log = logging.getLogger(__name__)
 
+# Pattern to strip SDK-injected system reminders from tool results
+SYSTEM_REMINDER_PATTERN = re.compile(r"\n*<system-reminder>.*?</system-reminder>\n*", re.DOTALL)
+
 
 class ToolUseWidget(Static):
     """A collapsible widget showing a tool use."""
@@ -125,6 +128,7 @@ class ToolUseWidget(Static):
                 if isinstance(self.result.content, str)
                 else str(self.result.content)
             )
+            content = SYSTEM_REMINDER_PATTERN.sub("", content)
             parts.append(f"Result:\n```\n{content}\n```")
         return "\n\n".join(parts)
 
@@ -172,6 +176,8 @@ class ToolUseWidget(Static):
                     if isinstance(result.content, str)
                     else str(result.content)
                 )
+                # Strip SDK-injected system reminders from display
+                content = SYSTEM_REMINDER_PATTERN.sub("", content)
                 preview = content[:2000] + ("..." if len(content) > 2000 else "")
                 if result.is_error:
                     details += f"\n\n**Error:**\n```\n{preview}\n```"
@@ -396,6 +402,7 @@ class AgentToolWidget(Static):
         tool_short = self.block.name.replace("mcp__chic__", "")
         if tool_short == "list_agents" and result.content:
             content = result.content if isinstance(result.content, str) else str(result.content)
+            content = SYSTEM_REMINDER_PATTERN.sub("", content)
             try:
                 self.mount(Static(content, classes="result-text"))
             except Exception:
