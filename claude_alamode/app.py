@@ -352,13 +352,25 @@ class ChatApp(App):
         }
 
     @asynccontextmanager
-    async def _show_prompt(self, prompt):
-        """Show a prompt widget, hiding input container. Restores on exit."""
-        agent = self._agent
+    async def _show_prompt(self, prompt, agent: Agent | None = None):
+        """Show a prompt widget, hiding input container. Restores on exit.
+
+        If agent is provided, the prompt is associated with that agent and only
+        shown when that agent is active. If agent is None, uses the currently
+        active agent.
+        """
+        if agent is None:
+            agent = self._agent
         if agent:
             agent.active_prompt = prompt
-        self.input_container.add_class("hidden")
+
+        # Mount prompt; only show if it belongs to the currently active agent
+        is_active = agent is None or agent.id == self.active_agent_id
         self.query_one("#input-wrapper").mount(prompt)
+        if is_active:
+            self.input_container.add_class("hidden")
+        else:
+            prompt.add_class("hidden")
         try:
             yield prompt
         finally:
@@ -368,7 +380,9 @@ class ChatApp(App):
                 prompt.remove()
             except Exception:
                 pass  # Prompt may already be removed
-            self.input_container.remove_class("hidden")
+            # Restore input if this agent is now active (user may have switched)
+            if agent is None or agent.id == self.active_agent_id:
+                self.input_container.remove_class("hidden")
 
     async def _handle_permission(
         self, tool_name: str, tool_input: dict[str, Any], context: ToolPermissionContext
@@ -1450,7 +1464,7 @@ class ChatApp(App):
         if request.tool_name == "AskUserQuestion":
             # Handle question prompts
             questions = request.tool_input.get("questions", [])
-            async with self._show_prompt(QuestionPrompt(questions)) as prompt:
+            async with self._show_prompt(QuestionPrompt(questions), agent) as prompt:
                 answers = await prompt.wait()
 
             if not answers:
@@ -1465,7 +1479,7 @@ class ChatApp(App):
         if request.tool_name in self.AUTO_EDIT_TOOLS:
             options.insert(0, ("allow_all", "Yes, all edits in this session"))
 
-        async with self._show_prompt(SelectionPrompt(request.title, options)) as prompt:
+        async with self._show_prompt(SelectionPrompt(request.title, options), agent) as prompt:
             async def ui_response():
                 result = await prompt.wait()
                 if not request._event.is_set():
