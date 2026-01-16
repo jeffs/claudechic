@@ -342,9 +342,12 @@ class ChatInput(TextArea):
         self.insert("\n")
 
     def action_history_prev(self) -> None:
-        """Go to previous command in history (only when cursor at top)."""
-        if self.cursor_location[0] != 0:
-            self.move_cursor_relative(rows=-1)
+        """Go to previous command in history (only when cursor at top visual row)."""
+        # Check if we're at the top visual row (considering soft wrap)
+        visual_offset = self.wrapped_document.location_to_offset(self.cursor_location)
+        if visual_offset.y > 0:
+            # Not at top - use built-in wrap-aware cursor movement
+            self.action_cursor_up()
             return
         if not self._history:
             return
@@ -357,10 +360,13 @@ class ChatInput(TextArea):
         self.move_cursor(self.document.end)
 
     def action_history_next(self) -> None:
-        """Go to next command in history (only when cursor at bottom)."""
-        last_line = self.document.line_count - 1
-        if self.cursor_location[0] != last_line:
-            self.move_cursor_relative(rows=1)
+        """Go to next command in history (only when cursor at bottom visual row)."""
+        # Check if we're at the bottom visual row (considering soft wrap)
+        visual_offset = self.wrapped_document.location_to_offset(self.cursor_location)
+        total_visual_rows = self.wrapped_document.height
+        if visual_offset.y < total_visual_rows - 1:
+            # Not at bottom - use built-in wrap-aware cursor movement
+            self.action_cursor_down()
             return
         if self._history_index == -1:
             return
