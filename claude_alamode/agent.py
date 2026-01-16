@@ -133,6 +133,7 @@ class Agent:
         self.pending_tools: dict[str, ToolUse] = {}
         self.active_tasks: dict[str, str] = {}  # task_id -> accumulated text
         self.response_had_tools: bool = False
+        self._needs_new_message: bool = True  # Start new ChatMessage on next text
 
         # Per-agent state
         self.pending_images: list[tuple[str, str, str, str]] = []  # (path, filename, media_type, base64)
@@ -259,6 +260,7 @@ class Agent:
         self._completion_event.clear()
         self._current_assistant = None
         self._current_text_buffer = ""
+        self._needs_new_message = True
 
         # Start response processing
         self._response_task = asyncio.create_task(
@@ -395,8 +397,9 @@ class Agent:
             if delta.get("type") == "text_delta":
                 text = delta.get("text", "")
                 if text:
-                    # First delta after tool use or start of message
-                    new_msg = not self._current_assistant
+                    # Start new message after tool use or at start of response
+                    new_msg = self._needs_new_message
+                    self._needs_new_message = False
                     self._handle_text_chunk(text, new_msg, parent_id)
 
     def _flush_current_text(self) -> None:
@@ -410,6 +413,7 @@ class Agent:
         """Handle tool use start."""
         self._flush_current_text()
         self.response_had_tools = True
+        self._needs_new_message = True  # Next text chunk starts a new ChatMessage
 
         # TodoWrite updates todos
         if block.name == "TodoWrite":

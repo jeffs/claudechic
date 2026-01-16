@@ -5,7 +5,8 @@ import pytest
 from claude_alamode.app import ChatApp
 from claude_alamode.widgets import ChatInput, ChatMessage, AgentSidebar, TodoPanel
 from claude_alamode.widgets.footer import StatusFooter
-from claude_alamode.messages import StreamChunk, ResponseComplete
+from claude_alamode.messages import StreamChunk, ResponseComplete, ToolUseMessage, ToolResultMessage
+from claude_agent_sdk import ToolUseBlock, ToolResultBlock
 from tests.conftest import wait_for_workers
 
 
@@ -282,6 +283,38 @@ async def test_stream_chunk_appends_to_message(mock_sdk):
         messages = list(chat_view.query(ChatMessage))
         assert len(messages) == 1
         assert messages[0].get_raw_content() == "Hello world!"
+
+
+@pytest.mark.asyncio
+async def test_stream_chunks_interleaved_with_tools(mock_sdk):
+    """Text after tool use creates a new ChatMessage (not appended to first)."""
+    app = ChatApp()
+    async with app.run_test() as pilot:
+        chat_view = app._chat_view
+        agent_id = app.active_agent_id
+
+        # First text chunk
+        app.post_message(StreamChunk("Planning...", new_message=True, agent_id=agent_id))
+        await pilot.pause()
+
+        # Tool use
+        tool_block = ToolUseBlock(id="tool-1", name="Read", input={"file_path": "/test.py"})
+        app.post_message(ToolUseMessage(tool_block, agent_id=agent_id))
+        await pilot.pause()
+
+        # Tool result
+        result_block = ToolResultBlock(tool_use_id="tool-1", content="file contents", is_error=False)
+        app.post_message(ToolResultMessage(result_block, agent_id=agent_id))
+        await pilot.pause()
+
+        # Second text chunk (should be new_message=True after tool)
+        app.post_message(StreamChunk("Done!", new_message=True, agent_id=agent_id))
+        await pilot.pause()
+
+        messages = list(chat_view.query(ChatMessage))
+        assert len(messages) == 2, f"Expected 2 messages, got {len(messages)}"
+        assert messages[0].get_raw_content() == "Planning..."
+        assert messages[1].get_raw_content() == "Done!"
 
 
 @pytest.mark.asyncio
