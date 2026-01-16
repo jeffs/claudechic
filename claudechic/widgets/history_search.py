@@ -26,8 +26,8 @@ class HistorySearch(Widget):
         height: auto;
         width: 100%;
         display: none;
-        background: #111111;
-        border-left: tall #cc7700;
+        background: $surface;
+        border-left: tall $primary;
         padding: 0 1;
 
         & Horizontal {
@@ -37,7 +37,7 @@ class HistorySearch(Widget):
 
         & #search-label {
             width: auto;
-            color: #cc7700;
+            color: $primary;
         }
 
         & #search-input {

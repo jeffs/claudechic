@@ -1,5 +1,11 @@
 /* Claude Code Textual UI Styles
  *
+ * CSS POLICY:
+ * -----------
+ * Widgets use DEFAULT_CSS for co-located styles (Tailwind-style).
+ * This file contains app-level layout and shared styles.
+ * Use theme variables ($primary, $surface, etc.) - avoid hardcoded hex colors.
+ *
  * Visual language: All content blocks use left border bars to indicate type.
  * - User messages: vibrant orange border ($primary)
  * - Assistant messages: dim blue border ($secondary)
@@ -395,16 +401,6 @@ ToolUseWidget Collapsible CollapsibleTitle {
 ToolUseWidget Collapsible Contents {
     padding: 0 0 0 2;
     background: transparent;
-}
-
-DiffWidget {
-    height: auto;
-    scrollbar-size: 1 1;
-}
-
-DiffContent {
-    color: $text;
-    width: auto;
 }
 
 /* Footer indicators (CPU and context bars) */

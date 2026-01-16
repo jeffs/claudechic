@@ -138,6 +138,7 @@ class DiffContent(Static):
 
     DEFAULT_CSS = """
     DiffContent {
+        color: $text;
         width: auto;
     }
     """
@@ -150,6 +151,7 @@ class DiffWidget(HorizontalScroll):
     DiffWidget {
         height: auto;
         max-height: 100%;
+        scrollbar-size: 1 1;
     }
     """
 
