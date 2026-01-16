@@ -23,8 +23,7 @@ class WorktreeItem(Widget):
     DEFAULT_CSS = """
     WorktreeItem {
         height: 3;
-        padding: 1 1;
-        border-left: tall transparent;
+        padding: 1 1 1 2;
         layout: horizontal;
     }
     WorktreeItem:hover {
@@ -72,15 +71,15 @@ class AgentItem(Widget):
     DEFAULT_CSS = """
     AgentItem {
         height: 3;
-        padding: 1 1;
-        border-left: tall transparent;
+        padding: 1 1 1 2;
         layout: horizontal;
     }
     AgentItem:hover {
         background: $surface-lighten-1;
     }
     AgentItem.active {
-        border-left: tall $primary;
+        padding: 1 1 1 1;
+        border-left: wide $primary;
         background: $surface;
     }
     AgentItem .agent-label {

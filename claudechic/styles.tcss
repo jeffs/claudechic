@@ -77,9 +77,8 @@ StatusFooter {
 /* Shared block styling - all content blocks */
 ChatMessage, ToolUseWidget, ThinkingIndicator, ErrorMessage {
     background: transparent;
-    margin: 0 0 1 0;  /* 1 line between blocks */
-    padding: 0 2 0 1;
-    border-left: wide transparent;
+    margin: 0 2 1 0;  /* 1 line between blocks, 2 from scrollbar */
+    padding: 0 2 0 2;
 }
 
 /* Error messages - red, like user messages but indicating problems */
@@ -143,23 +142,28 @@ ThinkingIndicator {
 }
 
 
-/* Copy buttons - top-right corner of block, visible on block hover */
+/* Copy buttons - overlaid, hidden until hover */
 .copy-btn {
+    display: none;
+    layer: above;
     dock: right;
     width: 3;
     min-width: 3;
     height: 1;
+    padding: 0;
+    text-align: center;
     background: transparent;
     border: none;
-    color: transparent;
-}
-
-.hovered .copy-btn {
     color: $text-muted;
 }
 
+.hovered .copy-btn {
+    display: block;
+}
+
 .copy-btn:hover {
-    color: $primary;
+    color: $primary !important;
+    background: transparent !important;
 }
 
 /* Main layout */
@@ -419,7 +423,6 @@ WorktreePrompt {
 #right-sidebar {
     width: 28;
     height: 100%;
-    border-left: solid $panel;
     /* Negative margin shifts chat+sidebar group left so chat is centered */
     margin-right: -28;
 }
