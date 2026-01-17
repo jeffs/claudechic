@@ -15,3 +15,4 @@ wheels/
 # Test artifacts
 test_write*.txt
 site/
+uv.lock
