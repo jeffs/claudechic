@@ -154,6 +154,9 @@ class ChatApp(App):
         self._status_footer: StatusFooter | None = None
         # Track running shell command for Ctrl+C cancellation
         self._shell_process: asyncio.subprocess.Process | None = None
+        # Agent-to-UI mappings (Agent has no UI references)
+        self._chat_views: dict[str, ChatView] = {}  # agent_id -> ChatView
+        self._active_prompts: dict[str, Any] = {}  # agent_id -> SelectionPrompt/QuestionPrompt
 
     # Properties to access active agent's state
     @property
@@ -207,7 +210,15 @@ class ChatApp(App):
     @property
     def _chat_view(self) -> ChatView | None:
         """Get the active agent's chat view."""
-        return self._agent.chat_view if self._agent else None
+        if self._agent:
+            return self._chat_views.get(self._agent.id)
+        return None
+
+    def _get_chat_view(self, agent_id: str | None) -> ChatView | None:
+        """Get chat view for an agent by ID."""
+        if agent_id:
+            return self._chat_views.get(agent_id)
+        return self._chat_view
 
     def _get_agent(self, agent_id: str | None) -> Agent | None:
         """Get agent by ID, or active agent if None."""
@@ -331,7 +342,7 @@ class ChatApp(App):
         if agent is None:
             agent = self._agent
         if agent:
-            agent.active_prompt = prompt
+            self._active_prompts[agent.id] = prompt
 
         # Mount prompt; only show if it belongs to the currently active agent
         is_active = agent is None or agent.id == self.active_agent_id
@@ -344,7 +355,7 @@ class ChatApp(App):
             yield prompt
         finally:
             if agent:
-                agent.active_prompt = None
+                self._active_prompts.pop(agent.id, None)
             try:
                 prompt.remove()
             except Exception:
@@ -525,9 +536,10 @@ class ChatApp(App):
         await agent.load_history(limit=50, cwd=cwd)
 
         # Re-render ChatView from Agent.messages
-        if agent.chat_view:
-            agent.chat_view._render_full()
-            self.call_after_refresh(_scroll_if_at_bottom, agent.chat_view)
+        chat_view = self._chat_views.get(agent.id)
+        if chat_view:
+            chat_view._render_full()
+            self.call_after_refresh(_scroll_if_at_bottom, chat_view)
 
     @work(group="refresh_context", exclusive=True)
     async def refresh_context(self) -> None:
@@ -604,31 +616,32 @@ class ChatApp(App):
 
     def _show_thinking(self, agent_id: str | None = None) -> None:
         """Show the thinking indicator for a specific agent."""
-        agent = self._get_agent(agent_id)
-        if agent and agent.chat_view:
-            agent.chat_view.start_response()
+        chat_view = self._get_chat_view(agent_id)
+        if chat_view:
+            chat_view.start_response()
 
     def _hide_thinking(self, agent_id: str | None = None) -> None:
         """Hide thinking indicator for a specific agent."""
         try:
-            agent = self._get_agent(agent_id)
-            if agent and agent.chat_view:
-                agent.chat_view._hide_thinking()
+            chat_view = self._get_chat_view(agent_id)
+            if chat_view:
+                chat_view._hide_thinking()
         except Exception:
             pass  # OK to fail during shutdown
 
     @profile
     def on_stream_chunk(self, event: StreamChunk) -> None:
-        agent = self._get_agent(event.agent_id)
-        if not agent or not agent.chat_view:
+        chat_view = self._get_chat_view(event.agent_id)
+        if not chat_view:
             return
 
-        agent.chat_view.append_text(event.text, event.new_message, event.parent_tool_use_id)
+        chat_view.append_text(event.text, event.new_message, event.parent_tool_use_id)
 
     @profile
     def on_tool_use_message(self, event: ToolUseMessage) -> None:
         agent = self._get_agent(event.agent_id)
-        if not agent or not agent.chat_view:
+        chat_view = self._get_chat_view(event.agent_id)
+        if not agent or not chat_view:
             return
 
         # TodoWrite gets special handling - update sidebar panel and/or inline widget
@@ -642,21 +655,21 @@ class ChatApp(App):
             if existing:
                 existing[0].update_todos(todos)
             elif self.size.width < self.SIDEBAR_MIN_WIDTH:
-                agent.chat_view.mount(TodoWidget(todos))
+                chat_view.mount(TodoWidget(todos))
             self._show_thinking(event.agent_id)
             return
 
         # Create ToolUse data object for ChatView
         tool = ToolUse(id=event.block.id, name=event.block.name, input=event.block.input)
-        agent.chat_view.append_tool_use(tool, event.block, event.parent_tool_use_id)
+        chat_view.append_tool_use(tool, event.block, event.parent_tool_use_id)
 
     @profile
     def on_tool_result_message(self, event: ToolResultMessage) -> None:
-        agent = self._get_agent(event.agent_id)
-        if not agent or not agent.chat_view:
+        chat_view = self._get_chat_view(event.agent_id)
+        if not chat_view:
             return
 
-        agent.chat_view.update_tool_result(event.block.tool_use_id, event.block, event.parent_tool_use_id)
+        chat_view.update_tool_result(event.block.tool_use_id, event.block, event.parent_tool_use_id)
         self._show_thinking(event.agent_id)
 
     def on_system_notification(self, event: SystemNotification) -> None:
@@ -705,14 +718,14 @@ class ChatApp(App):
 
     def _show_system_info(self, message: str, severity: str, agent_id: str | None) -> None:
         """Show system info message in chat view (not stored in history)."""
-        agent = self._get_agent(agent_id)
-        if not agent or not agent.chat_view:
+        chat_view = self._get_chat_view(agent_id)
+        if not chat_view:
             # Fallback to notify if no chat view
             notify_map = {"warning": "warning", "error": "error"}
             self.notify(message[:100], severity=notify_map.get(severity, "information"))  # type: ignore[arg-type]
             return
 
-        agent.chat_view.append_system_info(message, severity)
+        chat_view.append_system_info(message, severity)
 
     def on_resize(self, event) -> None:
         """Reposition right sidebar on resize."""
@@ -749,18 +762,19 @@ class ChatApp(App):
 
     def on_response_complete(self, event: ResponseComplete) -> None:
         agent = self._get_agent(event.agent_id)
+        chat_view = self._get_chat_view(event.agent_id)
         self._set_agent_status(AgentStatus.IDLE, event.agent_id)
         if event.result and agent:
             agent.session_id = event.result.session_id
             self.refresh_context()
-        if agent and agent.chat_view:
+        if chat_view:
             # End response via ChatView (hides thinking, flushes content)
-            agent.chat_view.end_response()
+            chat_view.end_response()
             # Flush any pending debounced content and mark summary
-            current = agent.chat_view._current_response
+            current = chat_view._current_response
             if current:
                 current.flush()
-                if agent.response_had_tools:
+                if agent and agent.response_had_tools:
                     current.add_class("summary")
         self.chat_input.focus()
         self.completions.put_nowait(event)
@@ -777,8 +791,7 @@ class ChatApp(App):
     def on_command_output_message(self, event: CommandOutputMessage) -> None:
         """Handle command output (e.g., /context) by displaying in chat."""
         self._hide_thinking(event.agent_id)
-        agent = self._get_agent(event.agent_id)
-        chat_view = agent.chat_view if agent else self._chat_view
+        chat_view = self._get_chat_view(event.agent_id)
         if not chat_view:
             return
 
@@ -1056,8 +1069,9 @@ class ChatApp(App):
             await self._replace_client(self._make_options(cwd=new_cwd, resume=resume_id, agent_name=agent.name))
 
             # Clear ChatView state
-            if agent.chat_view:
-                agent.chat_view.clear()
+            chat_view = self._chat_views.get(agent.id)
+            if chat_view:
+                chat_view.clear()
             agent.cwd = new_cwd
 
             if resume_id:
@@ -1170,21 +1184,25 @@ class ChatApp(App):
         # Save current input and hide old agent's UI
         if old_agent:
             old_agent.pending_input = self.chat_input.text
-            if old_agent.chat_view:
-                old_agent.chat_view.add_class("hidden")
-            if old_agent.active_prompt:
-                old_agent.active_prompt.add_class("hidden")
+            old_chat_view = self._chat_views.get(old_agent.id)
+            if old_chat_view:
+                old_chat_view.add_class("hidden")
+            old_prompt = self._active_prompts.get(old_agent.id)
+            if old_prompt:
+                old_prompt.add_class("hidden")
         # Switch active agent (setter syncs to AgentManager)
         self.active_agent_id = agent_id
         agent = self._agent
-        if agent and agent.chat_view:
-            agent.chat_view.remove_class("hidden")
+        chat_view = self._chat_views.get(agent_id)
+        if chat_view:
+            chat_view.remove_class("hidden")
         # Restore new agent's input
         if agent:
             self.chat_input.text = agent.pending_input
         # Show new agent's prompt if it has one, otherwise show input
-        if agent and agent.active_prompt:
-            agent.active_prompt.remove_class("hidden")
+        active_prompt = self._active_prompts.get(agent_id)
+        if active_prompt:
+            active_prompt.remove_class("hidden")
             self.input_container.add_class("hidden")
         else:
             self.input_container.remove_class("hidden")
@@ -1308,8 +1326,10 @@ class ChatApp(App):
         was_active = agent_id == self.active_agent_id
 
         # Remove chat view before closing (AgentManager.close removes from agents dict)
-        if agent.chat_view:
-            agent.chat_view.remove()
+        chat_view = self._chat_views.pop(agent_id, None)
+        if chat_view:
+            chat_view.remove()
+        self._active_prompts.pop(agent_id, None)
 
         # Close via AgentManager (handles disconnect, removes from agents dict,
         # triggers on_agent_closed which updates sidebar visibility)
@@ -1395,8 +1415,8 @@ class ChatApp(App):
                 main = self.query_one("#main", Horizontal)
                 main.mount(chat_view, after=self.query_one("#session-picker"))
 
-            # Store chat view on agent and set agent reference
-            agent.chat_view = chat_view
+            # Store mapping and set agent reference on ChatView
+            self._chat_views[agent.id] = chat_view
             chat_view.set_agent(agent)
 
             # Add to sidebar
@@ -1415,12 +1435,15 @@ class ChatApp(App):
         log.info(f"Switched to agent: {new_agent.name}")
 
         # Hide old agent's chat view
-        if old_agent and old_agent.chat_view:
-            old_agent.chat_view.add_class("hidden")
+        if old_agent:
+            old_chat_view = self._chat_views.get(old_agent.id)
+            if old_chat_view:
+                old_chat_view.add_class("hidden")
 
         # Show new agent's chat view
-        if new_agent.chat_view:
-            new_agent.chat_view.remove_class("hidden")
+        new_chat_view = self._chat_views.get(new_agent.id)
+        if new_chat_view:
+            new_chat_view.remove_class("hidden")
 
         # Update sidebar
         try:
@@ -1538,7 +1561,7 @@ class ChatApp(App):
         self, agent: Agent, prompt: str, images: list[ImageAttachment]
     ) -> None:
         """Handle prompt sent to agent - display user message in chat view."""
-        chat_view = agent.chat_view
+        chat_view = self._chat_views.get(agent.id)
         if not chat_view:
             return
 

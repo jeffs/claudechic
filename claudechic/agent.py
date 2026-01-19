@@ -164,9 +164,7 @@ class Agent:
         # Plan file path (cached after first lookup)
         self.plan_path: Path | None = None
 
-        # UI state - ChatView reference and active prompt
-        self.chat_view: Any = None  # ChatView widget (set by ChatApp)
-        self.active_prompt: Any = None  # Active SelectionPrompt/QuestionPrompt
+        # UI state (managed by ChatApp, not widget references)
         self.pending_input: str = ""  # Saved input text when switching away
 
         # Observer for UI integration (set by AgentManager)
