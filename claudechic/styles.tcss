@@ -236,7 +236,6 @@ ShellOutputWidget #shell-output {
 /* Chat views - both initial and dynamically created */
 #chat-view, .chat-view {
     width: 1fr;
-    min-width: 80;
     max-width: 100;
     padding: 1 1;
 }
