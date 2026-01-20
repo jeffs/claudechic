@@ -27,13 +27,24 @@ def get_project_sessions_dir(cwd: Path | None = None) -> Path | None:
     Args:
         cwd: Project directory. If None, uses current working directory.
     """
-    if cwd is None:
-        cwd = Path.cwd().absolute()
-    else:
-        cwd = cwd.absolute()
+    cwd = (cwd or Path.cwd()).absolute()
     project_key = str(cwd).replace("/", "-")
     sessions_dir = Path.home() / ".claude/projects" / project_key
     return sessions_dir if sessions_dir.exists() else None
+
+
+def _get_session_file(
+    session_id: str, cwd: Path | None = None, agent_id: str | None = None
+) -> Path | None:
+    """Get path to session file if it exists."""
+    sessions_dir = get_project_sessions_dir(cwd)
+    if not sessions_dir:
+        return None
+    if agent_id:
+        session_file = sessions_dir / f"agent-{agent_id}.jsonl"
+    else:
+        session_file = sessions_dir / f"{session_id}.jsonl"
+    return session_file if session_file.exists() else None
 
 
 def _extract_preview_from_chunk(chunk: bytes) -> str | None:
@@ -89,7 +100,6 @@ async def get_recent_sessions(
         except OSError:
             continue
 
-    # Sort by mtime descending - most recent first
     candidates.sort(key=lambda x: x[1], reverse=True)
 
     # Phase 2: Read previews from top candidates only
@@ -138,25 +148,16 @@ async def load_session_messages(
 ) -> list[dict]:
     """Load recent messages from a session file.
 
-    Args:
-        session_id: UUID of the session
-        limit: Maximum number of messages to return
-        cwd: Project directory. If None, uses current working directory.
-
-    Returns:
-        List of message dicts with 'type' key:
-        - user: {'type': 'user', 'content': str}
-        - assistant: {'type': 'assistant', 'content': str}
-        - tool_use: {'type': 'tool_use', 'name': str, 'input': dict, 'id': str}
+    Returns list of message dicts with 'type' key:
+    - user: {'type': 'user', 'content': str}
+    - assistant: {'type': 'assistant', 'content': str}
+    - tool_use: {'type': 'tool_use', 'name': str, 'input': dict, 'id': str}
     """
-    sessions_dir = get_project_sessions_dir(cwd)
-    if not sessions_dir:
+    session_file = _get_session_file(session_id, cwd)
+    if not session_file:
         return []
 
-    session_file = sessions_dir / f"{session_id}.jsonl"
-    if not session_file.exists():
-        return []
-
+    skip_tags = ("<command-name>/", "<local-command-stdout>", "<local-command-caveat>")
     messages = []
     try:
         async with aiofiles.open(session_file) as f:
@@ -167,11 +168,7 @@ async def load_session_messages(
                     if isinstance(content, str) and content.strip():
                         if content.strip().startswith("/"):
                             continue
-                        if "<command-name>/" in content:
-                            continue
-                        if "<local-command-stdout>" in content:
-                            continue
-                        if "<local-command-caveat>" in content:
+                        if any(tag in content for tag in skip_tags):
                             continue
                         messages.append({"type": "user", "content": content})
                 elif d.get("type") == "assistant":
@@ -203,24 +200,9 @@ async def load_session_messages(
 async def get_plan_path_for_session(
     session_id: str, cwd: Path | None = None
 ) -> Path | None:
-    """Get the plan file path for a session, if one exists.
-
-    Reads the session JSONL to find the slug, then checks if
-    ~/.claude/plans/{slug}.md exists.
-
-    Args:
-        session_id: UUID of the session
-        cwd: Project directory. If None, uses current working directory.
-
-    Returns:
-        Path to plan file if it exists, None otherwise.
-    """
-    sessions_dir = get_project_sessions_dir(cwd)
-    if not sessions_dir:
-        return None
-
-    session_file = sessions_dir / f"{session_id}.jsonl"
-    if not session_file.exists():
+    """Get the plan file path (~/.claude/plans/{slug}.md) for a session, if it exists."""
+    session_file = _get_session_file(session_id, cwd)
+    if not session_file:
         return None
 
     # Find slug in session file (read first 32KB, slug appears early)
@@ -253,33 +235,15 @@ async def get_plan_path_for_session(
 async def get_context_from_session(
     session_id: str, cwd: Path | None = None, agent_id: str | None = None
 ) -> int | None:
-    """Get context token usage from session file.
+    """Get total input context tokens from session file's last usage block.
 
-    Reads the session jsonl and finds the last usage block, then sums:
-    input_tokens + cache_creation_input_tokens + cache_read_input_tokens
-
-    Args:
-        session_id: UUID of the main session
-        cwd: Project directory. If None, uses current working directory.
-        agent_id: Optional short agent ID (e.g., "a35f34b") for sub-agent sessions
-
-    Returns:
-        Total input context tokens, or None if not found.
+    Sums: input_tokens + cache_creation_input_tokens + cache_read_input_tokens
     """
-    sessions_dir = get_project_sessions_dir(cwd)
-    if not sessions_dir:
-        return None
-
-    if agent_id:
-        session_file = sessions_dir / f"agent-{agent_id}.jsonl"
-    else:
-        session_file = sessions_dir / f"{session_id}.jsonl"
-
-    if not session_file.exists():
+    session_file = _get_session_file(session_id, cwd, agent_id)
+    if not session_file:
         return None
 
     # Read from end of file to find last usage entry efficiently
-    # This avoids reading entire file which can be megabytes for long sessions
     try:
         file_size = os.path.getsize(session_file)
         if file_size == 0:
