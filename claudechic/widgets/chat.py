@@ -13,7 +13,7 @@ from textual.message import Message
 from textual.widgets import Markdown, TextArea, Static, Button
 
 from claudechic.errors import log_exception
-from claudechic.profiling import profile, timed
+from claudechic.profiling import profile
 
 
 class Spinner(Static):
@@ -55,26 +55,17 @@ class Spinner(Static):
             Spinner._timer.stop()
             Spinner._timer = None
 
-    def _is_visible(self) -> bool:
-        """Check if spinner and all ancestors are visible."""
-        if self.has_class("hidden") or not self.display or not self.is_attached:
-            return False
-        node = self.parent
-        while node is not None:
-            if node.has_class("hidden"):
-                return False
-            node = node.parent
-        return True
-
     @staticmethod
     @profile
     def _tick_all() -> None:
-        """Advance frame and refresh only visible spinners."""
+        """Advance frame and refresh all spinners.
+
+        Note: We don't check visibility - refresh() on hidden widgets is cheap,
+        and the DOM-walking visibility check was more expensive than the savings.
+        """
         Spinner._frame = (Spinner._frame + 1) % len(Spinner.FRAMES)
-        with timed("Spinner._tick_all.refresh"):
-            for spinner in list(Spinner._instances):
-                if spinner._is_visible():
-                    spinner.refresh()
+        for spinner in list(Spinner._instances):
+            spinner.refresh()
 
 
 class ThinkingIndicator(Spinner):

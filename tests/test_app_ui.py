@@ -352,7 +352,7 @@ async def test_sidebar_shows_with_multiple_agents(mock_sdk):
 
         sidebar = app.query_one("#right-sidebar")
         # With multiple agents and wide enough, sidebar should show
-        assert not sidebar.has_class("hidden")
+        assert sidebar.display is True
 
 
 @pytest.mark.asyncio
@@ -649,11 +649,11 @@ async def test_hamburger_button_narrow_screen(mock_sdk):
         await pilot.pause()
 
         # Hamburger should be visible on narrow screen with multiple agents
-        assert hamburger.has_class("visible")
+        assert hamburger.display is True
 
         # Sidebar should be hidden (not overlay yet)
         sidebar = app.query_one("#right-sidebar")
-        assert sidebar.has_class("hidden")
+        assert sidebar.display is False
 
 
 @pytest.mark.asyncio
@@ -676,7 +676,7 @@ async def test_hamburger_opens_sidebar_overlay(mock_sdk):
         await pilot.pause()
 
         # Sidebar should now be visible as overlay
-        assert not sidebar.has_class("hidden")
+        assert sidebar.display is True
         assert sidebar.has_class("overlay")
 
 
@@ -699,7 +699,7 @@ async def test_escape_closes_sidebar_overlay(mock_sdk):
         await pilot.pause()
 
         sidebar = app.query_one("#right-sidebar")
-        assert not sidebar.has_class("hidden"), (
+        assert sidebar.display is True, (
             "Sidebar should be visible after opening overlay"
         )
         assert app._sidebar_overlay_open, "Overlay state should be True"
@@ -712,4 +712,4 @@ async def test_escape_closes_sidebar_overlay(mock_sdk):
         assert not app._sidebar_overlay_open, (
             "Overlay state should be False after escape"
         )
-        assert sidebar.has_class("hidden"), "Sidebar should be hidden after escape"
+        assert sidebar.display is False, "Sidebar should be hidden after escape"
