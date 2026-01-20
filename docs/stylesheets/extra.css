@@ -162,6 +162,7 @@
 .md-typeset .admonition.question,
 .md-typeset details.question {
   border-left-color: #333333;
+  background-color: transparent !important;
 }
 
 .md-typeset details.question:hover {
@@ -173,34 +174,54 @@
   cursor: pointer;
   color: #cccccc;
   padding-left: 1em;
+  background-color: transparent !important;
 }
 
-/* User messages - orange accent (matching app's user message style) */
+/* Chat message admonitions - shared styles */
+.md-typeset .admonition.user,
+.md-typeset details.user,
+.md-typeset .admonition.claude,
+.md-typeset details.claude {
+  background-color: #0a0a0a;
+  font-family: var(--md-code-font-family);
+  padding: 0.1em 0.6em 0.1em 1em;
+}
+
+.md-typeset .admonition.user > .admonition-title,
+.md-typeset details.user > summary,
+.md-typeset .admonition.claude > .admonition-title,
+.md-typeset details.claude > summary {
+  font-weight: 500;
+  padding-left: 0;
+}
+
+.md-typeset .admonition.user p,
+.md-typeset details.user p,
+.md-typeset .admonition.claude p,
+.md-typeset details.claude p {
+  margin: 0.2em 0;
+}
+
+/* User messages - orange accent */
 .md-typeset .admonition.user,
 .md-typeset details.user {
   border-left-color: #cc7700;
-  background-color: #0a0a0a;
 }
 
 .md-typeset .admonition.user > .admonition-title,
 .md-typeset details.user > summary {
   color: #cc7700;
-  font-weight: 500;
-  padding-left: 0;
 }
 
-/* Claude messages - blue-gray accent (matching app's assistant message style) */
+/* Claude messages - blue-gray accent */
 .md-typeset .admonition.claude,
 .md-typeset details.claude {
   border-left-color: #557799;
-  background-color: #0a0a0a;
 }
 
 .md-typeset .admonition.claude > .admonition-title,
 .md-typeset details.claude > summary {
   color: #88aacc;
-  font-weight: 500;
-  padding-left: 0;
 }
 
 /* Hide the chevron/marker on details */
@@ -214,9 +235,9 @@
   display: none;
 }
 
-/* Links - muted, orange on hover */
+/* Links - dimmed orange, bright on hover */
 .md-typeset a {
-  color: #999999;
+  color: #996633;
   text-decoration: none;
 }
 
