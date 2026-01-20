@@ -1,12 +1,6 @@
 # Claude Chic
 
-A stylish terminal UI for Claude Code.
-
-![Claude Chic screenshot](images/screenshot.png)
-
-## What is this?
-
-Claude Chic wraps the [Claude Agent SDK](https://platform.claude.com/docs/en/agent-sdk/overview) in a [Textual](https://textual.textualize.io/) interface.
+A stylish terminal UI that wraps the [Claude Agent SDK](https://platform.claude.com/docs/en/agent-sdk/overview) in a [Textual](https://textual.textualize.io/) interface.
 
 You get the same Claude Code agent, but with a more visually polished and hackable experience:
 
@@ -18,6 +12,10 @@ You get the same Claude Code agent, but with a more visually polished and hackab
 
 This project *does not* re-implement the Claude agent logic (we trust Anthropic with that).  It only provides a different skin on top of that experience.
 Also, by putting a layer around the Agent SDK we're able to provide some nice features, like multi-agent and git management.
+
+<div class="video-container">
+<iframe src="https://www.youtube-nocookie.com/embed/AIEDqdSPuEo" title="YouTube video player" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe>
+</div>
 
 ## Installation
 
@@ -59,9 +57,9 @@ claudechic
 
 ??? question "How does this relate to OpenCode?"
 
-    OpenCode is more impressive and mature.  OpenCode supports many different models and is way more mature.
+    OpenCode is more impressive.  OpenCode supports many different models and is way more mature.
 
-    OpenCode designed their own Agent logic.  This just reuses Claude Code's logic.  This project is more thin.
+    OpenCode designed their own Agent logic.  Claude Chic reuses Claude Code's agent logic, which some people prefer.  This project is generally more thin.  You should try both.  You should try lots of things.
 
 ??? question "How do you make money?"
 

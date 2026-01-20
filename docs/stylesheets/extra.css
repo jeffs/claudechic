@@ -38,6 +38,21 @@
   display: none;
 }
 
+/* Responsive video container */
+.video-container {
+  position: relative;
+  width: 100%;
+  padding-bottom: 56.25%; /* 16:9 aspect ratio */
+}
+
+.video-container iframe {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+}
+
 /* Navigation - left border treatment */
 .md-nav__link {
   color: #888888;
