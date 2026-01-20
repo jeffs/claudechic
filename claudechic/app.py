@@ -907,6 +907,8 @@ class ChatApp(App):
 
     def on_history_search_selected(self, event: HistorySearch.Selected) -> None:
         """Handle history selection - populate input."""
+        # Suppress autocomplete BEFORE setting text to prevent timer start
+        self.query_one(TextAreaAutoComplete).suppress()
         self.chat_input.text = event.text
         self.chat_input.move_cursor(self.chat_input.document.end)
         self.chat_input.focus()

@@ -418,6 +418,9 @@ class ChatInput(TextArea):
             self._history_index = len(self._history) - 1
         elif self._history_index > 0:
             self._history_index -= 1
+        # Suppress autocomplete BEFORE setting text to prevent timer start
+        if self._autocomplete:
+            self._autocomplete.suppress()
         self.text = self._history[self._history_index]
         self.move_cursor(self.document.end)
 
@@ -436,6 +439,9 @@ class ChatInput(TextArea):
             return
         if self._history_index == -1:
             return
+        # Suppress autocomplete BEFORE setting text to prevent timer start
+        if self._autocomplete:
+            self._autocomplete.suppress()
         if self._history_index < len(self._history) - 1:
             self._history_index += 1
             self.text = self._history[self._history_index]

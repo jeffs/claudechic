@@ -113,6 +113,7 @@ class TextAreaAutoComplete(Widget):
         self._mode: str | None = None  # "slash" or "path" or None
         self._trigger_pos: int = 0  # Position of / or @
         self._completing: bool = False  # Flag to prevent re-showing during completion
+        self._suppressed: bool = False  # Suppress until user types
         self._search_timer = None  # Timer for debounced file search
 
     @property
@@ -160,6 +161,9 @@ class TextAreaAutoComplete(Widget):
         if isinstance(event, TextArea.Changed):
             self._handle_text_change()
         elif isinstance(event, events.Key):
+            # Clear suppression on any printable key (user is typing)
+            if self._suppressed and event.character and event.character.isprintable():
+                self._suppressed = False
             self._handle_key(event)
 
     def _get_cursor_position(self) -> int:
@@ -178,7 +182,7 @@ class TextAreaAutoComplete(Widget):
 
     def _handle_text_change(self) -> None:
         """Called when TextArea content changes."""
-        if self._completing:
+        if self._completing or self._suppressed:
             return
         state = self._get_target_state()
         # Use text up to cursor, or full text if cursor at start (common when setting text directly)
@@ -545,6 +549,12 @@ class TextAreaAutoComplete(Widget):
 
     def action_show(self) -> None:
         self.styles.display = "block"
+
+    def suppress(self) -> None:
+        """Suppress autocomplete until user types a printable character."""
+        self._suppressed = True
+        self._cancel_search_timer()
+        self.action_hide()
 
     @on(OptionList.OptionSelected)
     def _on_option_selected(self, event: OptionList.OptionSelected) -> None:

@@ -101,3 +101,33 @@ async def test_tab_completion(mock_sdk):
         # Input should now be /worktree finish
         assert input_widget.text == "/worktree finish"
         assert autocomplete.styles.display == "none"
+
+
+@pytest.mark.asyncio
+async def test_suppression_on_history_nav(mock_sdk):
+    """Test that autocomplete is suppressed when navigating history."""
+    app = ChatApp()
+    async with app.run_test(size=(80, 24)) as pilot:
+        input_widget = app.query_one(ChatInput)
+        autocomplete = app.query_one(TextAreaAutoComplete)
+
+        # Add history entry starting with /
+        input_widget._history = ["/agent test"]
+        input_widget._history_index = -1
+
+        # Navigate up to history
+        await pilot.press("up")
+        await pilot.pause()
+
+        # Input should have history content
+        assert input_widget.text == "/agent test"
+        # Autocomplete should be suppressed (hidden despite matching /)
+        assert autocomplete.styles.display == "none"
+        assert autocomplete._suppressed is True
+
+        # Type something to clear suppression
+        await pilot.press("x")
+        await pilot.pause()
+
+        # Suppression should be cleared
+        assert autocomplete._suppressed is False
