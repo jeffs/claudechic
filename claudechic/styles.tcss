@@ -217,7 +217,7 @@ ShellOutputWidget #shell-output {
 }
 
 
-/* Copy buttons - very faint, brighter on hover */
+/* Copy buttons - hidden until hovered */
 .copy-btn {
     layer: above;
     dock: right;
@@ -228,7 +228,7 @@ ShellOutputWidget #shell-output {
     text-align: center;
     background: transparent;
     border: none;
-    color: $surface-lighten-2;
+    color: transparent;
 }
 
 .copy-btn:hover {
@@ -423,7 +423,7 @@ MarkdownH2 {
 MarkdownH3 {
     color: $text;
     text-style: bold;
-    margin: 1 0 0 0;
+    margin: 1 0 1 0;
 }
 
 MarkdownTableContent > .header {
