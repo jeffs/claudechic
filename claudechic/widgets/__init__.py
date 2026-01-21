@@ -6,7 +6,6 @@ Re-exports all widgets from submodules for backward compatibility.
 # Base classes and mixins
 from claudechic.widgets.base import (
     ClickableMixin,
-    HoverableMixin,
     PointerMixin,
     CopyButton,
     CopyableMixin,
@@ -91,7 +90,6 @@ from claudechic.widgets.prompts import (
 __all__ = [
     # Base
     "ClickableMixin",
-    "HoverableMixin",
     "PointerMixin",
     "CopyButton",
     "CopyableMixin",

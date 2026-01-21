@@ -28,7 +28,6 @@ from claudechic.widgets.content.diff import DiffWidget
 from claudechic.widgets.content.message import ChatMessage
 from claudechic.widgets.primitives.spinner import Spinner
 from claudechic.widgets.base.copyable import CopyButton, CopyableMixin
-from claudechic.widgets.base.cursor import HoverableMixin
 
 log = logging.getLogger(__name__)
 
@@ -79,7 +78,7 @@ class EditPlanRequested(Message):
         self.plan_path = plan_path
 
 
-class ToolUseWidget(Static, HoverableMixin, CopyableMixin):
+class ToolUseWidget(Static, CopyableMixin):
     """A collapsible widget showing a tool use."""
 
     can_focus = False
@@ -369,7 +368,7 @@ class TaskWidget(Static):
             pass  # Widget may not be mounted
 
 
-class ShellOutputWidget(Static, HoverableMixin, CopyableMixin):
+class ShellOutputWidget(Static, CopyableMixin):
     """Collapsible widget showing inline shell command output."""
 
     can_focus = False

@@ -2,13 +2,17 @@
 
 from textual.widgets import Collapsible
 
+from claudechic.widgets.base.cursor import ClickableMixin
 
-class QuietCollapsible(Collapsible):
+
+class QuietCollapsible(Collapsible, ClickableMixin):
     """Collapsible that doesn't scroll itself into view on toggle.
 
     The default Textual Collapsible calls scroll_visible() whenever it's
     toggled, which causes scroll jumping in chat interfaces where we want
     to control scrolling ourselves (e.g., tail-following new content).
+
+    Also shows pointer cursor to indicate clickability.
     """
 
     def _watch_collapsed(self, collapsed: bool) -> None:

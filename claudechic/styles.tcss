@@ -217,7 +217,7 @@ ShellOutputWidget #shell-output {
 }
 
 
-/* Copy buttons - overlaid, hidden until hover */
+/* Copy buttons - very faint, brighter on hover */
 .copy-btn {
     layer: above;
     dock: right;
@@ -228,16 +228,10 @@ ShellOutputWidget #shell-output {
     text-align: center;
     background: transparent;
     border: none;
-    color: transparent;  /* Hidden by default via transparent color */
+    color: $surface-lighten-2;
 }
 
-ChatMessage:hover .copy-btn,
-ToolUseWidget:hover .copy-btn,
-ShellOutputWidget:hover .copy-btn {
-    color: $text-muted;  /* Visible on hover */
-}
-
-Button.copy-btn:hover {
+.copy-btn:hover {
     color: $primary !important;
     background: transparent !important;
 }

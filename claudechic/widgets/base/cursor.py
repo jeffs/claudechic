@@ -1,9 +1,8 @@
 """Mouse cursor mixins for Textual widgets.
 
-Provides three mixins:
+Provides two mixins:
 - ClickableMixin: Hand cursor on hover (for buttons)
 - PointerMixin: Configurable cursor style (for text areas)
-- HoverableMixin: Resets cursor on leave
 
 Uses OSC 22 escape sequences supported by modern terminals
 (Ghostty, Kitty, WezTerm, foot). Unsupported terminals ignore the sequence.
@@ -73,16 +72,6 @@ class PointerMixin:
         set_pointer("default")
         if hasattr(super(), "on_leave"):
             super().on_leave()  # type: ignore[misc]
-
-
-class HoverableMixin:
-    """Mixin that resets cursor to default on mouse leave.
-
-    Use CSS :hover pseudo-class for visual styling (efficient).
-    """
-
-    def on_leave(self) -> None:
-        set_pointer("default")
 
 
 class ClickableMixin:
