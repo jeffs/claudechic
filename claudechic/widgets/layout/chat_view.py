@@ -12,6 +12,7 @@ from claudechic.agent import (
     UserContent,
     AssistantContent,
     ToolUse,
+    TextBlock,
 )
 from claudechic.enums import ToolName
 from claudechic.widgets.content.message import (
@@ -89,7 +90,7 @@ class ChatView(AutoHideScroll):
         # Count total tool uses to determine which to collapse
         # (collapse all except last RECENT_TOOLS_EXPANDED)
         total_tools = sum(
-            len(item.content.tool_uses)
+            sum(1 for b in item.content.blocks if isinstance(b, ToolUse))
             for item in self._agent.messages
             if item.role == "assistant" and isinstance(item.content, AssistantContent)
         )
@@ -138,20 +139,21 @@ class ChatView(AutoHideScroll):
     ) -> tuple[list[Widget], int]:
         """Create widgets for an assistant message (without mounting).
 
+        Iterates over blocks in order to preserve text/tool interleaving.
         Returns (widgets, updated_tool_index).
         """
         widgets: list[Widget] = []
-        if content.text:
-            msg = ChatMessage(content.text)
-            msg.add_class("assistant-message")
-            widgets.append(msg)
-
-        for tool in content.tool_uses:
-            collapse = tool_index < collapse_threshold
-            widgets.append(
-                self._create_tool_widget(tool, completed=True, collapsed=collapse)
-            )
-            tool_index += 1
+        for block in content.blocks:
+            if isinstance(block, TextBlock):
+                msg = ChatMessage(block.text)
+                msg.add_class("assistant-message")
+                widgets.append(msg)
+            elif isinstance(block, ToolUse):
+                collapse = tool_index < collapse_threshold
+                widgets.append(
+                    self._create_tool_widget(block, completed=True, collapsed=collapse)
+                )
+                tool_index += 1
 
         return widgets, tool_index
 

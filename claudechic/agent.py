@@ -76,11 +76,21 @@ class ToolUse:
 
 
 @dataclass
-class AssistantContent:
-    """An assistant message in chat history."""
+class TextBlock:
+    """A text block within an assistant turn."""
 
-    text: str = ""
-    tool_uses: list[ToolUse] = field(default_factory=list)
+    text: str
+
+
+@dataclass
+class AssistantContent:
+    """An assistant message in chat history.
+
+    Contains an ordered list of blocks (TextBlock or ToolUse) to preserve
+    the original interleaving of text and tool uses.
+    """
+
+    blocks: list[TextBlock | ToolUse] = field(default_factory=list)
 
 
 @dataclass
@@ -259,17 +269,15 @@ class Agent:
                     ChatItem(role="user", content=UserContent(text=m["content"]))
                 )
             elif m["type"] == "assistant":
-                # Start or continue assistant content
-                if current_assistant is None:
-                    current_assistant = AssistantContent(text=m["content"])
-                else:
-                    # Append to existing (shouldn't happen often with current parser)
-                    current_assistant.text += "\n" + m["content"]
-            elif m["type"] == "tool_use":
-                # Add tool use to current assistant content
+                # Add text block to current assistant content (preserving order)
                 if current_assistant is None:
                     current_assistant = AssistantContent()
-                current_assistant.tool_uses.append(
+                current_assistant.blocks.append(TextBlock(text=m["content"]))
+            elif m["type"] == "tool_use":
+                # Add tool use to current assistant content (preserving order)
+                if current_assistant is None:
+                    current_assistant = AssistantContent()
+                current_assistant.blocks.append(
                     ToolUse(
                         id=m.get("id", ""),
                         name=m["name"],
@@ -481,7 +489,8 @@ class Agent:
             )
 
         self._current_text_buffer += text
-        self._current_assistant.text = self._current_text_buffer
+        # Update the current TextBlock in-place for live streaming display
+        self._update_current_text_block()
         if self.observer:
             self.observer.on_message_updated(self)
             self.observer.on_text_chunk(self, text, new_message, parent_tool_use_id)
@@ -502,10 +511,24 @@ class Agent:
                     self._needs_new_message = False
                     self._handle_text_chunk(text, new_msg, parent_id)
 
+    def _update_current_text_block(self) -> None:
+        """Update the current TextBlock with accumulated text (for streaming)."""
+        if not self._current_assistant or not self._current_text_buffer:
+            return
+        # Find or create the trailing TextBlock
+        if self._current_assistant.blocks and isinstance(
+            self._current_assistant.blocks[-1], TextBlock
+        ):
+            self._current_assistant.blocks[-1].text = self._current_text_buffer
+        else:
+            self._current_assistant.blocks.append(
+                TextBlock(text=self._current_text_buffer)
+            )
+
     def _flush_current_text(self) -> None:
-        """Flush accumulated text to current assistant message."""
+        """Flush accumulated text to current assistant message and reset buffer."""
         if self._current_assistant and self._current_text_buffer:
-            self._current_assistant.text = self._current_text_buffer
+            self._update_current_text_block()
             self._current_text_buffer = ""
             if self.observer:
                 self.observer.on_message_updated(self)
@@ -550,7 +573,7 @@ class Agent:
             self.messages.append(
                 ChatItem(role="assistant", content=self._current_assistant)
             )
-        self._current_assistant.tool_uses.append(tool)
+        self._current_assistant.blocks.append(tool)
         if self.observer:
             self.observer.on_message_updated(self)
             self.observer.on_tool_use(self, tool)
