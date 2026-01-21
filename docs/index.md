@@ -18,7 +18,7 @@ This project *does not* re-implement the Claude agent logic (we trust Anthropic 
 Also, by putting a layer around the Agent SDK we're able to provide some nice features, like multi-agent and git management.
 
 <div class="video-container">
-<iframe src="https://www.youtube-nocookie.com/embed/AIEDqdSPuEo?autoplay=1&mute=1" title="YouTube video player" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe>
+<iframe src="https://www.youtube-nocookie.com/embed/AIEDqdSPuEo?autoplay=1&mute=1&loop=1&playlist=AIEDqdSPuEo" title="YouTube video player" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe>
 </div>
 
 ## Installation
