@@ -84,6 +84,10 @@ def get_child_processes(claude_pid: int) -> list[BackgroundProcess]:
             if not command:
                 continue
 
+            # Filter out our own monitoring commands
+            if command.startswith("ps "):
+                continue
+
             # Get start time
             create_time = datetime.fromtimestamp(child.create_time())
 
