@@ -71,7 +71,7 @@ class Spinner(Static):
         """
         Spinner._frame = (Spinner._frame + 1) % len(Spinner.FRAMES)
         for spinner in list(Spinner._instances):
-            spinner.refresh()
+            spinner.refresh(layout=False)
 
 
 class ThinkingIndicator(Spinner):
@@ -150,14 +150,20 @@ class ChatMessage(Static, PointerMixin):
         self._pending_text = ""  # Accumulated text waiting to be flushed
         self._flush_timer = None  # Timer for debounced flush
 
+    def _is_streaming(self) -> bool:
+        """Check if we're actively streaming content."""
+        return bool(self._pending_text) or self._flush_timer is not None
+
     def on_enter(self) -> None:
         set_pointer(self.pointer_style)
-        if not self.has_class("hovered"):
+        # Skip expensive class changes during streaming
+        if not self._is_streaming() and not self.has_class("hovered"):
             self.add_class("hovered")
 
     def on_leave(self) -> None:
         set_pointer("default")
-        if self.has_class("hovered"):
+        # Skip expensive class changes during streaming
+        if not self._is_streaming() and self.has_class("hovered"):
             self.remove_class("hovered")
 
     def compose(self) -> ComposeResult:

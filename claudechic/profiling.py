@@ -9,6 +9,7 @@ from contextlib import contextmanager
 
 _enabled = os.environ.get("CHIC_PROFILE", "true").lower() != "false"
 _stats: dict[str, dict] = defaultdict(lambda: {"count": 0, "total": 0.0, "max": 0.0})
+_start_time = time.perf_counter()
 
 
 @contextmanager
@@ -60,7 +61,15 @@ def get_stats_table():
     """Get statistics as a Rich Table (borderless, compact)."""
     from rich.table import Table
 
-    table = Table(box=None, padding=(0, 4), collapse_padding=True, show_header=True)
+    duration = get_session_duration()
+    table = Table(
+        box=None,
+        padding=(0, 4),
+        collapse_padding=True,
+        show_header=True,
+        title=f"[dim]Session duration: {duration:.1f}s[/]",
+        title_justify="left",
+    )
     table.add_column("Function", style="dim")
     table.add_column("Calls", justify="right")
     table.add_column("Total", justify="right")
@@ -79,12 +88,20 @@ def get_stats_table():
     return table
 
 
+def get_session_duration() -> float:
+    """Get session duration in seconds."""
+    return time.perf_counter() - _start_time
+
+
 def get_stats_text() -> str:
     """Get statistics as plain text for copying."""
     if not _stats:
         return "No profiling data collected."
 
+    duration = get_session_duration()
     lines = [
+        f"Session duration: {duration:.1f}s",
+        "",
         f"{'Function':<45} {'Calls':>8} {'Total':>10} {'Avg':>10} {'Max':>10}",
         "-" * 85,
     ]
