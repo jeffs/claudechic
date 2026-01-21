@@ -1,5 +1,6 @@
 """Agent sidebar widget for multi-agent management."""
 
+import time
 from pathlib import Path
 
 from textual.app import ComposeResult
@@ -70,18 +71,41 @@ class SidebarSection(Widget):
         yield Static(self._title, classes="section-title")
 
 
+def _format_time_ago(mtime: float) -> str:
+    """Format a timestamp as relative time (e.g., '2 hours ago')."""
+    delta = time.time() - mtime
+    if delta < 60:
+        return "just now"
+    elif delta < 3600:
+        mins = int(delta / 60)
+        return f"{mins} min{'s' if mins != 1 else ''} ago"
+    elif delta < 86400:
+        hours = int(delta / 3600)
+        return f"{hours} hour{'s' if hours != 1 else ''} ago"
+    elif delta < 604800:
+        days = int(delta / 86400)
+        return f"{days} day{'s' if days != 1 else ''} ago"
+    else:
+        weeks = int(delta / 604800)
+        return f"{weeks} week{'s' if weeks != 1 else ''} ago"
+
+
 class SessionItem(ListItem, PointerMixin):
     """A session in the session picker sidebar."""
 
-    def __init__(self, session_id: str, preview: str, msg_count: int = 0) -> None:
+    def __init__(
+        self, session_id: str, title: str, mtime: float, msg_count: int = 0
+    ) -> None:
         super().__init__()
         self.session_id = session_id
-        self.preview = preview
+        self.title = title
+        self.mtime = mtime
         self.msg_count = msg_count
 
     def compose(self) -> ComposeResult:
-        yield Label(self.preview, classes="session-preview")
-        yield Label(f"({self.msg_count} msgs)", classes="session-meta")
+        yield Label(self.title, classes="session-preview")
+        time_ago = _format_time_ago(self.mtime)
+        yield Label(f"{time_ago} · {self.msg_count} msgs", classes="session-meta")
 
 
 class HamburgerButton(Button):

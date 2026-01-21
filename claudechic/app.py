@@ -1183,8 +1183,8 @@ class ChatApp(App):
         picker = self.query_one("#session-picker", ListView)
         picker.clear()
         sessions = await get_recent_sessions(search=search)
-        for session_id, preview, _, msg_count in sessions:
-            picker.append(SessionItem(session_id, preview, msg_count))
+        for session_id, title, mtime, msg_count in sessions:
+            picker.append(SessionItem(session_id, title, mtime, msg_count))
         # Select first item and focus for keyboard nav
         if sessions:
             self.call_after_refresh(

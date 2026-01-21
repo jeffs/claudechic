@@ -47,22 +47,48 @@ def _get_session_file(
     return session_file if session_file.exists() else None
 
 
-def _extract_preview_from_chunk(chunk: bytes) -> str | None:
-    """Extract first user message preview from a chunk of session data."""
-    for line in chunk.split(b"\n"):
+def _extract_session_info(
+    content: bytes,
+) -> tuple[str | None, str | None, int, float | None]:
+    """Extract summary, first message, count, and last timestamp from session content.
+
+    Returns (summary, first_user_message, msg_count, last_timestamp_unix).
+    """
+    from datetime import datetime
+
+    summary = None
+    first_user_msg = None
+    msg_count = 0
+    last_timestamp: float | None = None
+
+    for line in content.split(b"\n"):
         if not line.strip():
             continue
         try:
             d = json.loads(line)
-            if d.get("type") == "user" and not d.get("isMeta"):
-                content = d.get("message", {}).get("content", "")
-                if isinstance(content, str) and not content.startswith("<"):
-                    text = content.replace("\n", " ")
-                    return text[:200] + "…" if len(text) > 200 else text
+            if d.get("type") == "summary":
+                summary = d.get("summary")
+            elif d.get("type") == "user" and not d.get("isMeta"):
+                msg_count += 1
+                # Capture first user message as fallback title
+                if first_user_msg is None:
+                    text = d.get("message", {}).get("content", "")
+                    if (
+                        isinstance(text, str)
+                        and text.strip()
+                        and not text.startswith("<")
+                    ):
+                        first_user_msg = text.replace("\n", " ")[:100]
+            # Track timestamp from any entry
+            if ts := d.get("timestamp"):
+                try:
+                    dt = datetime.fromisoformat(ts.replace("Z", "+00:00"))
+                    last_timestamp = dt.timestamp()
+                except ValueError:
+                    pass
         except (json.JSONDecodeError, UnicodeDecodeError):
-            # Skip lines that fail to parse (partial line at chunk boundary)
             continue
-    return None
+    return summary, first_user_msg, msg_count, last_timestamp
 
 
 async def get_recent_sessions(
@@ -70,25 +96,20 @@ async def get_recent_sessions(
 ) -> list[tuple[str, str, float, int]]:
     """Get recent sessions from a project.
 
-    Optimized for responsiveness:
-    - Reads only first 16KB of each file for preview (not entire file)
-    - Sorts by mtime first, then only reads files needed
-    - Yields to event loop periodically
-
     Args:
         limit: Maximum number of sessions to return
-        search: Optional text to filter sessions by content
+        search: Optional text to filter sessions by title
         cwd: Project directory. If None, uses current working directory.
 
     Returns:
-        List of (session_id, preview, mtime, msg_count) tuples,
+        List of (session_id, title, mtime, msg_count) tuples,
         sorted by modification time descending.
     """
     sessions_dir = get_project_sessions_dir(cwd)
     if not sessions_dir:
         return []
 
-    # Phase 1: Quick stat() to get files sorted by mtime (sync, fast)
+    # Get files sorted by mtime
     candidates = []
     for f in sessions_dir.glob("*.jsonl"):
         if not is_valid_uuid(f.stem):
@@ -96,53 +117,40 @@ async def get_recent_sessions(
         try:
             stat = f.stat()
             if stat.st_size > 0:
-                candidates.append((f, stat.st_mtime, stat.st_size))
+                candidates.append((f, stat.st_mtime))
         except OSError:
             continue
 
     candidates.sort(key=lambda x: x[1], reverse=True)
 
-    # Phase 2: Read previews from top candidates only
-    # If no search, we only need `limit` files
-    # If searching, we need to check more but can stop early
     search_lower = search.lower()
     sessions = []
-    check_limit = (
-        len(candidates) if search else limit * 2
-    )  # read a few extra in case some fail
 
-    for i, (f, mtime, _) in enumerate(candidates[:check_limit]):
-        # Yield to event loop every 10 files to stay responsive
+    for i, (f, mtime) in enumerate(candidates):
         if i > 0 and i % 10 == 0:
             await asyncio.sleep(0)
 
         try:
-            # Read full file for preview and line count
             async with aiofiles.open(f, mode="rb") as fh:
                 content = await fh.read()
-
-            preview = _extract_preview_from_chunk(content[:16384])
-            if not preview:
-                continue
-
-            # For search, check if preview matches (simplified - only checks preview, not full content)
-            if search and search_lower not in preview.lower():
-                continue
-
-            # Count user messages - matches Claude's message count
-            msg_count = sum(
-                1
-                for line in content.split(b"\n")
-                if b'"type":"user"' in line or b'"type": "user"' in line
-            )
-            sessions.append((f.stem, preview, mtime, msg_count))
-
-            # Early exit if we have enough and not searching
-            if not search and len(sessions) >= limit:
-                break
-
+            summary, first_msg, msg_count, last_ts = _extract_session_info(content)
+            title = summary or first_msg or f.stem[:8]
+            # Prefer timestamp from file content over file mtime
+            effective_time = last_ts or mtime
         except (IOError, OSError):
+            title = f.stem[:8]
+            msg_count = 0
+            effective_time = mtime
+
+        if msg_count == 0:
             continue
+        if search and search_lower not in title.lower():
+            continue
+
+        sessions.append((f.stem, title, effective_time, msg_count))
+
+        if not search and len(sessions) >= limit:
+            break
 
     return sessions[:limit]
 
