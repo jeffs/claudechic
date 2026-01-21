@@ -145,12 +145,9 @@ User types → ChatInput.Submitted
 
 ```
 Agent._process_response() processes SDK stream
-    → For each TextBlock: agent.on_text_chunk(agent, text, ...)
-        → AgentManager forwards to ChatApp._on_agent_text_chunk
-            → app.post_message(StreamChunk(..., agent_id=agent.id))
-                → on_stream_chunk() handler
-                    → agent = _get_agent(event.agent_id)
-                    → Mount/update ChatMessage on agent.chat_view
+    → For each TextBlock: observer.on_text_chunk(agent, text, ...)
+        → ChatApp.on_text_chunk() updates UI directly (no message queue)
+            → chat_view.append_text(text, new_message, parent_tool_id)
 ```
 
 ### Agent switching

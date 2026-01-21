@@ -10,23 +10,6 @@ from claude_agent_sdk import (
 )
 
 
-class StreamChunk(Message):
-    """Message sent when a chunk of text is received from Claude."""
-
-    def __init__(
-        self,
-        text: str,
-        new_message: bool = False,
-        parent_tool_use_id: str | None = None,
-        agent_id: str | None = None,
-    ) -> None:
-        self.text = text
-        self.new_message = new_message  # Start a new ChatMessage widget
-        self.parent_tool_use_id = parent_tool_use_id  # If set, belongs to a Task
-        self.agent_id = agent_id  # Which agent this belongs to
-        super().__init__()
-
-
 class ResponseComplete(Message):
     """Message sent when Claude's response is complete."""
 

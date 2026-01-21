@@ -86,12 +86,13 @@ async def test_widget_behavior():
         assert widget.some_property == expected
 ```
 
-### Testing messages
+### Testing streaming text
 
-Post custom messages directly to test handlers:
+Call `append_text` directly on the chat view:
 
 ```python
-app.post_message(StreamChunk("Hello ", new_message=True, agent_id=agent_id))
+chat_view = app._chat_view
+chat_view.append_text("Hello ", new_message=True, parent_tool_id=None)
 await pilot.pause()
 ```
 

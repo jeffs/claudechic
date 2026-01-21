@@ -30,7 +30,6 @@ from claude_agent_sdk import (
     ResultMessage,
 )
 from claudechic.messages import (
-    StreamChunk,
     ResponseComplete,
     SystemNotification,
     ToolUseMessage,
@@ -718,14 +717,6 @@ class ChatApp(App):
                 chat_view._hide_thinking()
         except Exception:
             pass  # OK to fail during shutdown
-
-    @profile
-    def on_stream_chunk(self, event: StreamChunk) -> None:
-        chat_view = self._get_chat_view(event.agent_id)
-        if not chat_view:
-            return
-
-        chat_view.append_text(event.text, event.new_message, event.parent_tool_use_id)
 
     @profile
     def on_tool_use_message(self, event: ToolUseMessage) -> None:
@@ -1781,15 +1772,10 @@ class ChatApp(App):
     def on_text_chunk(
         self, agent: Agent, text: str, new_message: bool, parent_tool_use_id: str | None
     ) -> None:
-        """Handle text chunk from agent - post Textual Message for UI."""
-        self.post_message(
-            StreamChunk(
-                text,
-                new_message=new_message,
-                parent_tool_use_id=parent_tool_use_id,
-                agent_id=agent.id,
-            )
-        )
+        """Handle text chunk from agent - update UI directly (bypasses message queue)."""
+        chat_view = self._chat_views.get(agent.id)
+        if chat_view:
+            chat_view.append_text(text, new_message, parent_tool_use_id)
 
     def on_tool_use(self, agent: Agent, tool: ToolUse) -> None:
         """Handle tool use from agent - post Textual Message for UI."""

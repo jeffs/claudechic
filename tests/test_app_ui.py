@@ -6,7 +6,6 @@ from claudechic.app import ChatApp
 from claudechic.widgets import ChatInput, ChatMessage, AgentSidebar, TodoPanel
 from claudechic.widgets.footer import StatusFooter
 from claudechic.messages import (
-    StreamChunk,
     ResponseComplete,
     ToolUseMessage,
     ToolResultMessage,
@@ -240,15 +239,14 @@ async def test_double_ctrl_c_quits(mock_sdk):
 
 @pytest.mark.asyncio
 async def test_stream_chunk_creates_message(mock_sdk):
-    """StreamChunk message creates ChatMessage widget."""
+    """Text streaming creates ChatMessage widget."""
     app = ChatApp()
     async with app.run_test() as pilot:
         chat_view = app._chat_view
         assert chat_view is not None
 
-        # Post a stream chunk
-        agent_id = app.active_agent_id
-        app.post_message(StreamChunk("Hello ", new_message=True, agent_id=agent_id))
+        # Simulate text chunk (now direct call, not message)
+        chat_view.append_text("Hello ", new_message=True, parent_tool_id=None)
         await pilot.pause()
 
         # Should have created a ChatMessage
@@ -259,16 +257,15 @@ async def test_stream_chunk_creates_message(mock_sdk):
 
 @pytest.mark.asyncio
 async def test_stream_chunk_appends_to_message(mock_sdk):
-    """Sequential StreamChunks append to same message."""
+    """Sequential text chunks append to same message."""
     app = ChatApp()
     async with app.run_test() as pilot:
         chat_view = app._chat_view
         assert chat_view is not None
-        agent_id = app.active_agent_id
 
-        app.post_message(StreamChunk("Hello ", new_message=True, agent_id=agent_id))
+        chat_view.append_text("Hello ", new_message=True, parent_tool_id=None)
         await pilot.pause()
-        app.post_message(StreamChunk("world!", new_message=False, agent_id=agent_id))
+        chat_view.append_text("world!", new_message=False, parent_tool_id=None)
         await pilot.pause()
 
         messages = list(chat_view.query(ChatMessage))
@@ -286,9 +283,7 @@ async def test_stream_chunks_interleaved_with_tools(mock_sdk):
         agent_id = app.active_agent_id
 
         # First text chunk
-        app.post_message(
-            StreamChunk("Planning...", new_message=True, agent_id=agent_id)
-        )
+        chat_view.append_text("Planning...", new_message=True, parent_tool_id=None)
         await pilot.pause()
 
         # Tool use
@@ -306,7 +301,7 @@ async def test_stream_chunks_interleaved_with_tools(mock_sdk):
         await pilot.pause()
 
         # Second text chunk (should be new_message=True after tool)
-        app.post_message(StreamChunk("Done!", new_message=True, agent_id=agent_id))
+        chat_view.append_text("Done!", new_message=True, parent_tool_id=None)
         await pilot.pause()
 
         messages = list(chat_view.query(ChatMessage))
