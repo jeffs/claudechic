@@ -9,11 +9,12 @@ CONFIG_PATH = Path.home() / ".claude" / "claudechic.yaml"
 
 _config: dict = {}
 _loaded: bool = False
+_new_install: bool = False  # True if analytics ID was just created
 
 
 def _load_config() -> dict:
     """Load config from disk, creating with defaults if missing."""
-    global _config, _loaded
+    global _config, _loaded, _new_install
     if _loaded:
         return _config
 
@@ -30,6 +31,7 @@ def _load_config() -> dict:
         _config["analytics"]["enabled"] = True
     if "id" not in _config["analytics"]:
         _config["analytics"]["id"] = str(uuid.uuid4())
+        _new_install = True
         _save_config()
 
     _loaded = True
@@ -70,3 +72,9 @@ def set_theme(theme: str) -> None:
     """Save theme preference."""
     _load_config()["theme"] = theme
     _save_config()
+
+
+def is_new_install() -> bool:
+    """Check if this is a new install (analytics ID was just created)."""
+    _load_config()  # Ensure config is loaded
+    return _new_install

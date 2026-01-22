@@ -2,6 +2,7 @@
 
 import os
 import platform
+import shutil
 import uuid as uuid_mod
 from datetime import datetime, timezone
 
@@ -28,8 +29,8 @@ async def capture(event: str, **properties: str | int | float | bool) -> None:
     # Build properties - session_id on all events, context only on app_started
     props: dict = {"$session_id": SESSION_ID, **properties}
 
-    if event == "app_started":
-        # Include version and environment context only on session start
+    if event in ("app_started", "app_installed"):
+        # Include version and environment context on session start and install
         props["claudechic_version"] = VERSION
         try:
             term_size = os.get_terminal_size()
@@ -39,6 +40,8 @@ async def capture(event: str, **properties: str | int | float | bool) -> None:
             pass
         props["term_program"] = os.environ.get("TERM_PROGRAM", "unknown")
         props["os"] = platform.system()
+        props["has_uv"] = shutil.which("uv") is not None
+        props["has_conda"] = shutil.which("conda") is not None
 
     payload = {
         "api_key": POSTHOG_API_KEY,

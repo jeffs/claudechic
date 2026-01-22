@@ -48,7 +48,7 @@ from claudechic.permissions import PermissionRequest, PermissionResponse
 from claudechic.agent import Agent, ImageAttachment, ToolUse
 from claudechic.agent_manager import AgentManager
 from claudechic.analytics import capture
-from claudechic.config import get_theme, set_theme
+from claudechic.config import get_theme, set_theme, is_new_install
 from claudechic.enums import AgentStatus, PermissionChoice, ToolName
 from claudechic.mcp import set_app, create_chic_server
 from claudechic.file_index import FileIndex
@@ -516,8 +516,10 @@ class ChatApp(App):
         )
 
     async def on_mount(self) -> None:
-        # Track app start
+        # Track app start (and install if new user)
         self._app_start_time = time.time()
+        if is_new_install():
+            self.run_worker(capture("app_installed"))
         self.run_worker(capture("app_started", resumed=bool(self._resume_on_start)))
 
         # Start CPU sampling profiler
