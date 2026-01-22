@@ -1,30 +1,34 @@
 # Claude Chic
 
-Terminal UI that wraps the [Claude Agent SDK](https://platform.claude.com/docs/en/agent-sdk/overview) in a [Textual](https://textual.textualize.io/) interface.  Run this:
+A stylish terminal UI for [Claude Code](https://docs.anthropic.com/en/docs/claude-code), built with [Textual](https://textual.textualize.io/).
 
 ```bash
 uvx claudechic /welcome
 ```
 
-You get the same Claude Code agent, but with a more visually polished and hackable experience:
+Claude Code, but ...
 
--  **Pretty** - designed to remove clutter and focus attention
--  **Hackable** - easily extensible with Python Code
+-  **Stylish** - designed to remove clutter and focus attention
 -  **Multi-Agent** - run several Claude agents in parallel
--  **Open Source** - all UI code available
--  **Just Claude** - uses the same Claude Code agent you trust
+-  **Hackable** - easily extensible with Python Code
+-  **Claude-forward** - with the same Claude Code agent you trust
 
-This project *does not* re-implement the Claude agent logic (we trust Anthropic with that).  It only provides a different skin on top of that experience.
-Also, by putting a layer around the Agent SDK we're able to provide some nice features, like multi-agent and git management.
+This leverages the [Claude Agent SDK](https://platform.claude.com/docs/en/agent-sdk/overview) to provide the same Claude intelligence with a different UX.
 
 <div class="video-container">
-<iframe src="https://www.youtube-nocookie.com/embed/AIEDqdSPuEo?autoplay=1&mute=1&loop=1&playlist=AIEDqdSPuEo" title="YouTube video player" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe>
+<iframe src="https://www.youtube-nocookie.com/embed/2HcORToX5sU?autoplay=0&mute=0&loop=0&playlist=2HcORToX5sU" title="Claude Chic Introduction" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe>
 </div>
 
-## Installation
+## Get Started
 
 ```bash
 uv tool install claudechic --upgrade
+```
+
+or
+
+```bash
+pip install claudechic --upgrade
 ```
 
 Use Claude to log in with your subscription:
@@ -33,7 +37,7 @@ Use Claude to log in with your subscription:
 claude /login
 ```
 
-## Run
+And then run
 
 ```bash
 claudechic

@@ -5,6 +5,7 @@ site_url: https://mrocklin.github.io/claudechic/
 nav:
   - Home: index.md
   - Multi-Agent: agents.md
+  - Style: style.md
   - Architecture: architecture.md
   - Related Work: related.md
 
