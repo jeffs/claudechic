@@ -115,6 +115,33 @@ sleep 2 && curl -s localhost:9999/status
 
 Use this when you want to restart the application.  Don't restart the `./scripts/claudechic-remote 9999` server, just send an exit signal and wait a moment.
 
+### POST /key
+Simulate keyboard key presses.
+
+```bash
+# Press escape
+curl -s -X POST localhost:9999/key -H "Content-Type: application/json" -d '{"keys": ["escape"]}'
+
+# Navigate with arrow keys
+curl -s -X POST localhost:9999/key -d '{"keys": ["down", "down", "enter"]}'
+
+# Press Ctrl+C
+curl -s -X POST localhost:9999/key -d '{"keys": ["ctrl+c"]}'
+```
+
+Response:
+```json
+{"status": "pressed", "keys": ["escape"]}
+```
+
+Supported keys:
+- Single characters: `a`, `1`, etc.
+- Named keys: `escape`, `enter`, `tab`, `space`, `backspace`, `delete`
+- Arrow keys: `up`, `down`, `left`, `right`
+- Function keys: `f1` through `f12`
+- Modifiers: `ctrl+c`, `shift+tab`, `ctrl+n`
+- Special: `wait:500` to pause 500ms between keys
+
 ## Common Test Patterns
 
 ### Send message and check response

@@ -3,6 +3,7 @@
 Enables external processes (like Claude in another terminal) to:
 - Take screenshots (SVG or PNG)
 - Send messages to the active agent
+- Simulate key presses
 - Wait for agent idle
 - Get screen content as text
 - Exit the app (for restart)
@@ -54,7 +55,7 @@ async def handle_screenshot(request: web.Request) -> web.Response:
 
         if fmt == "png":
             # Convert SVG to PNG using macOS qlmanage
-            import subprocess
+            from subprocess import DEVNULL
 
             png_path = path if path.endswith(".png") else f"{path}.png"
             proc = await asyncio.create_subprocess_exec(
@@ -65,8 +66,8 @@ async def handle_screenshot(request: web.Request) -> web.Response:
                 "-o",
                 str(Path(png_path).parent),
                 result_path,
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
+                stdout=DEVNULL,
+                stderr=DEVNULL,
             )
             await proc.wait()
             # qlmanage adds .png to the filename
@@ -175,9 +176,10 @@ async def handle_wait_idle(request: web.Request) -> web.Response:
     from claudechic.enums import AgentStatus
 
     try:
-        start = asyncio.get_event_loop().time()
+        loop = asyncio.get_running_loop()
+        start = loop.time()
         while agent.status != AgentStatus.IDLE:
-            if asyncio.get_event_loop().time() - start > timeout:
+            if loop.time() - start > timeout:
                 return web.json_response(
                     {"error": "Timeout waiting for idle"}, status=408
                 )
@@ -214,6 +216,51 @@ async def handle_status(request: web.Request) -> web.Response:  # noqa: ARG001
     )
 
 
+async def handle_key(request: web.Request) -> web.Response:
+    """Simulate key presses. Body: {"keys": ["escape", "j", "k", "enter"]}
+
+    Supported keys:
+    - Single characters: "a", "1", etc.
+    - Named keys: "escape", "enter", "tab", "space", "backspace", "delete"
+    - Arrow keys: "up", "down", "left", "right"
+    - Function keys: "f1" through "f12"
+    - Modifiers: "ctrl+c", "shift+tab", "ctrl+n"
+    - Special: "wait:500" to pause 500ms between keys
+    """
+    if _app is None:
+        return web.json_response({"error": "App not initialized"}, status=500)
+
+    try:
+        data = await request.json()
+        keys = data.get("keys", [])
+    except Exception:
+        return web.json_response({"error": "Invalid JSON body"}, status=400)
+
+    if not keys:
+        return web.json_response({"error": "No keys provided"}, status=400)
+
+    if not isinstance(keys, list):
+        keys = [keys]
+
+    try:
+        # Handle wait:N delays between keys
+        batch: list[str] = []
+        for key in keys:
+            if key.startswith("wait:"):
+                if batch:
+                    await _app._press_keys(batch)
+                    batch = []
+                ms = int(key.split(":")[1])
+                await asyncio.sleep(ms / 1000)
+            else:
+                batch.append(key)
+        if batch:
+            await _app._press_keys(batch)
+        return web.json_response({"status": "pressed", "keys": keys})
+    except Exception as e:
+        return web.json_response({"error": str(e)}, status=500)
+
+
 async def handle_exit(request: web.Request) -> web.Response:  # noqa: ARG001
     """Exit the app cleanly. Use this before restarting."""
     if _app is None:
@@ -241,6 +288,7 @@ async def start_server(app: ChatApp, port: int) -> None:
     webapp.router.add_get("/wait_idle", handle_wait_idle)
     webapp.router.add_get("/status", handle_status)
     webapp.router.add_post("/exit", handle_exit)
+    webapp.router.add_post("/key", handle_key)
 
     runner = web.AppRunner(webapp)
     await runner.setup()
