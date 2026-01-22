@@ -21,8 +21,10 @@ def _load_config() -> dict:
     if CONFIG_PATH.exists():
         with open(CONFIG_PATH) as f:
             _config = yaml.safe_load(f) or {}
+        is_new_file = False
     else:
         _config = {}
+        is_new_file = True
 
     # Ensure analytics section with defaults
     if "analytics" not in _config:
@@ -30,9 +32,13 @@ def _load_config() -> dict:
     if "enabled" not in _config["analytics"]:
         _config["analytics"]["enabled"] = True
     if "id" not in _config["analytics"]:
-        _config["analytics"]["id"] = str(uuid.uuid4())
-        _new_install = True
-        _save_config()
+        if is_new_file:
+            _config["analytics"]["id"] = str(uuid.uuid4())
+            _new_install = True
+            _save_config()
+        else:
+            # File exists but ID missing - don't generate, use fallback
+            _config["analytics"]["id"] = "anonymous"
 
     _loaded = True
     return _config
