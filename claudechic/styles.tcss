@@ -275,39 +275,6 @@ ShellOutputWidget #shell-output {
     display: none;
 }
 
-/* Session picker */
-#session-picker {
-    width: 1fr;
-    max-width: 80;
-    padding: 1 2;
-    background: $background;
-}
-
-#session-picker > * {
-    background: $background;
-}
-
-#session-picker.hidden {
-    display: none;
-}
-
-#session-picker > SessionItem {
-    padding: 0 0 0 1;
-    height: auto;
-    margin: 0 0 1 0;
-    border-left: tall $panel;
-}
-
-#session-picker > SessionItem:hover,
-#session-picker > SessionItem.-highlight {
-    background: $surface-darken-1;
-    border-left: tall $primary;
-}
-
-#session-picker .session-meta {
-    color: $text-muted;
-}
-
 /* Worktree modal overlay */
 #worktree-modal {
     layer: modal;

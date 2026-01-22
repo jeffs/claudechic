@@ -19,7 +19,6 @@ from claudechic.theme import CHIC_THEME
 from textual.binding import Binding
 from textual.containers import Vertical, Horizontal
 from textual.events import MouseUp
-from textual.widgets import ListView, TextArea
 from textual import work
 
 from claude_agent_sdk import (
@@ -66,7 +65,6 @@ from claudechic.widgets import (
     ProcessPanel,
     SelectionPrompt,
     QuestionPrompt,
-    SessionItem,
     TextAreaAutoComplete,
     HistorySearch,
     AgentSection,
@@ -167,7 +165,6 @@ class ChatApp(App):
         self._resume_on_start = resume_session_id
         self._initial_prompt = initial_prompt
         self._remote_port = remote_port
-        self._session_picker_active = False
         # Event queues for testing
         self.interactions: asyncio.Queue[PermissionRequest] = asyncio.Queue()
         self.completions: asyncio.Queue[ResponseComplete] = asyncio.Queue()
@@ -198,10 +195,6 @@ class ChatApp(App):
         self._hamburger_btn: HamburgerButton | None = None
         # Available models from SDK (populated in _update_slash_commands)
         self._available_models: list[dict] = []
-        # Diff mode state
-        self._diff_mode = False
-        self._diff_sidebar: Any = None
-        self._diff_view: Any = None
 
     # Properties to access active agent's state
     @property
@@ -460,7 +453,6 @@ class ChatApp(App):
     def compose(self) -> ComposeResult:
         yield HamburgerButton(id="hamburger-btn")
         with Horizontal(id="main"):
-            yield ListView(id="session-picker", classes="hidden")
             with Vertical(id="chat-column"):
                 yield ChatView(id="chat-view")
                 with Vertical(id="input-container"):
@@ -1171,35 +1163,17 @@ class ChatApp(App):
         self.run_worker(_run(), exclusive=False)
 
     def _show_session_picker(self) -> None:
-        picker = self.query_one("#session-picker", ListView)
-        chat_view = self._chat_view
-        picker.remove_class("hidden")
-        if chat_view:
-            chat_view.add_class("hidden")
-        self._session_picker_active = True
-        self._update_session_picker("")
+        from claudechic.screens import SessionScreen
 
-    @work(group="session_picker", exclusive=True)
-    async def _update_session_picker(self, search: str) -> None:
-        picker = self.query_one("#session-picker", ListView)
-        picker.clear()
-        sessions = await get_recent_sessions(search=search)
-        for session_id, title, mtime, msg_count in sessions:
-            picker.append(SessionItem(session_id, title, mtime, msg_count))
-        # Select first item and focus for keyboard nav
-        if sessions:
-            self.call_after_refresh(
-                lambda: (setattr(picker, "index", 0), picker.focus())
-            )
+        def on_dismiss(session_id: str | None) -> None:
+            if session_id:
+                log.info(f"Resuming session: {session_id}")
+                self.run_worker(self._load_and_display_history(session_id))
+                self.notify(f"Resuming {session_id[:8]}...")
+                self.resume_session(session_id)
+            self.chat_input.focus()
 
-    def _hide_session_picker(self) -> None:
-        self._session_picker_active = False
-        self.query_one("#session-picker", ListView).add_class("hidden")
-        chat_view = self._chat_view
-        if chat_view:
-            chat_view.remove_class("hidden")
-        self.chat_input.clear()
-        self.chat_input.focus()
+        self.push_screen(SessionScreen(), on_dismiss)
 
     @work(group="reconnect", exclusive=True, exit_on_error=False)
     async def _reconnect_sdk(self, new_cwd: Path) -> None:
@@ -1249,19 +1223,9 @@ class ChatApp(App):
 
     def action_escape(self) -> None:
         """Handle Escape: cancel picker, dismiss prompts, close overlay, or interrupt agent."""
-        # Diff mode takes priority
-        if self._diff_mode:
-            self._exit_diff_mode()
-            return
-
         # Sidebar overlay takes priority (most likely what user wants to dismiss)
         if self._sidebar_overlay_open:
             self._close_sidebar_overlay()
-            return
-
-        # Session picker takes priority
-        if self._session_picker_active:
-            self._hide_session_picker()
             return
 
         # Cancel active agent's prompt only
@@ -1279,19 +1243,6 @@ class ChatApp(App):
             self._hide_thinking()
             self.notify("Interrupted")
             self.chat_input.focus()
-
-    def on_text_area_changed(self, event: TextArea.Changed) -> None:
-        if self._session_picker_active and event.text_area.id == "input":
-            self._update_session_picker(event.text_area.text)
-
-    def on_list_view_selected(self, event: ListView.Selected) -> None:
-        if isinstance(event.item, SessionItem):
-            session_id = event.item.session_id
-            log.info(f"Resuming session: {session_id}")
-            self._hide_session_picker()
-            self.run_worker(self._load_and_display_history(session_id))
-            self.notify(f"Resuming {session_id[:8]}...")
-            self.resume_session(session_id)
 
     def on_agent_item_selected(self, event: AgentItem.Selected) -> None:
         """Handle agent selection from sidebar."""
@@ -1666,20 +1617,6 @@ class ChatApp(App):
             event.stop()
 
     def on_key(self, event) -> None:
-        # In diff mode, handle j/k/up/down for navigation
-        if self._diff_mode:
-            if event.key in ("j", "down"):
-                self.action_diff_next()
-                event.prevent_default()
-                event.stop()
-                return
-            elif event.key in ("k", "up"):
-                self.action_diff_prev()
-                event.prevent_default()
-                event.stop()
-                return
-            return  # Don't redirect other keys to input in diff mode
-
         if self.query(SelectionPrompt) or self.query(QuestionPrompt):
             return
         if not self._chat_input or self.focused == self._chat_input:
@@ -2037,87 +1974,15 @@ class ChatApp(App):
     # ── Diff Mode ──────────────────────────────────────────────────────────────
 
     def _toggle_diff_mode(self) -> None:
-        """Toggle between diff view and normal chat view."""
-        if self._diff_mode:
-            self._exit_diff_mode()
-        else:
-            self._do_enter_diff_mode()
-
-    @work(exclusive=True)
-    async def _do_enter_diff_mode(self) -> None:
-        """Enter diff mode - show git changes."""
-        from claudechic.features.diff import DiffSidebar, DiffView, get_changes
+        """Show diff screen for reviewing uncommitted changes."""
+        from claudechic.screens import DiffScreen
 
         agent = self._agent
         if not agent:
             self.notify("No active agent", severity="error")
             return
 
-        changes = await get_changes(str(agent.cwd))
-        if not changes:
-            self.notify("No uncommitted changes", severity="warning")
-            return
+        def on_dismiss(_: None) -> None:
+            self.chat_input.focus()
 
-        self._diff_mode = True
-
-        # Hide chat UI
-        chat_column = self.query_one("#chat-column", Vertical)
-        chat_column.add_class("hidden")
-        self.query_one("#right-sidebar", Vertical).add_class("hidden")
-
-        # Create and mount diff widgets
-        main = self.query_one("#main", Horizontal)
-        self._diff_sidebar = DiffSidebar(changes, id="diff-sidebar")
-        self._diff_view = DiffView(changes, id="diff-view")
-        main.mount(self._diff_sidebar)
-        main.mount(self._diff_view)
-
-        # Focus diff view for j/k navigation
-        self._diff_view.focus()
-
-    def _exit_diff_mode(self) -> None:
-        """Exit diff mode - return to normal chat."""
-        if not self._diff_mode:
-            return
-
-        self._diff_mode = False
-
-        # Remove diff widgets
-        if self._diff_sidebar:
-            self._diff_sidebar.remove()
-            self._diff_sidebar = None
-        if self._diff_view:
-            self._diff_view.remove()
-            self._diff_view = None
-
-        # Show chat UI
-        chat_column = self.query_one("#chat-column", Vertical)
-        chat_column.remove_class("hidden")
-        # Restore sidebar based on layout rules
-        self._position_right_sidebar()
-
-        self.chat_input.focus()
-
-    def on_diff_file_item_selected(self, event: Any) -> None:
-        """Handle programmatic file selection - just update sidebar highlight."""
-        if self._diff_sidebar and hasattr(event, "path"):
-            self._diff_sidebar.set_active(event.path)
-
-    def on_diff_file_item_clicked(self, event: Any) -> None:
-        """Handle user click on sidebar item - scroll to file."""
-        if not hasattr(event, "path"):
-            return
-        if self._diff_sidebar:
-            self._diff_sidebar.set_active(event.path)
-        if self._diff_view:
-            self._diff_view.scroll_to_file(event.path)
-
-    def action_diff_next(self) -> None:
-        """Navigate to next file in diff view (j key)."""
-        if self._diff_mode and self._diff_view:
-            self._diff_view.action_next_file()
-
-    def action_diff_prev(self) -> None:
-        """Navigate to previous file in diff view (k key)."""
-        if self._diff_mode and self._diff_view:
-            self._diff_view.action_prev_file()
+        self.push_screen(DiffScreen(agent.cwd), on_dismiss)

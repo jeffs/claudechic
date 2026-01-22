@@ -45,6 +45,9 @@ claudechic/
 │       ├── commands.py   # /worktree command handlers
 │       └── git.py        # Git worktree operations
 ├── processes.py       # BackgroundProcess dataclass, child process detection
+├── screens/           # Full-page screens (navigation)
+│   ├── diff.py        # DiffScreen - review uncommitted changes
+│   └── session.py     # SessionScreen - session browser for /resume
 └── widgets/
     ├── __init__.py    # Re-exports all widgets for backward compat
     ├── prompts.py     # All prompt widgets (Selection, Question, Model, Worktree)

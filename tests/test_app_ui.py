@@ -198,32 +198,34 @@ async def test_sidebar_agent_selection(mock_sdk):
 
 
 @pytest.mark.asyncio
-async def test_resume_shows_session_picker(mock_sdk):
-    """'/resume' shows session picker."""
+async def test_resume_shows_session_screen(mock_sdk):
+    """'/resume' shows session screen."""
+    from claudechic.screens import SessionScreen
+
     app = ChatApp()
     async with app.run_test() as pilot:
         await submit_command(app, pilot, "/resume")
 
-        # Session picker should be visible
-        assert app._session_picker_active
+        # Session screen should be on screen stack
+        assert isinstance(app.screen, SessionScreen)
 
 
 @pytest.mark.asyncio
-async def test_escape_hides_session_picker(mock_sdk):
-    """Escape hides session picker."""
+async def test_escape_hides_session_screen(mock_sdk):
+    """Escape hides session screen."""
+    from claudechic.screens import SessionScreen
+
     app = ChatApp()
     async with app.run_test() as pilot:
         await submit_command(app, pilot, "/resume")
 
-        assert app._session_picker_active
+        assert isinstance(app.screen, SessionScreen)
 
-        # Need to refocus app to receive escape (session picker may have focus)
-        app.screen.focus_next()
-        await pilot.pause()
-        app.action_escape()
+        # Press escape to dismiss screen
+        await pilot.press("escape")
         await pilot.pause()
 
-        assert not app._session_picker_active
+        assert not isinstance(app.screen, SessionScreen)
 
 
 @pytest.mark.asyncio
