@@ -2,6 +2,7 @@
 
 import json
 import subprocess
+import sys
 from dataclasses import dataclass
 from datetime import datetime
 
@@ -25,7 +26,14 @@ class UsageInfo:
 
 
 def get_oauth_token() -> str | None:
-    """Get OAuth access token from macOS Keychain."""
+    """Get OAuth access token from system credential store.
+
+    Currently only supports macOS Keychain. Returns None on other platforms.
+    """
+    # Only macOS is supported (uses security command for Keychain access)
+    if sys.platform != "darwin":
+        return None
+
     try:
         result = subprocess.run(
             [
@@ -65,6 +73,10 @@ async def fetch_usage() -> UsageInfo:
 
     token = get_oauth_token()
     if not token:
+        if sys.platform != "darwin":
+            return UsageInfo(
+                None, None, None, error="Usage tracking only available on macOS"
+            )
         return UsageInfo(None, None, None, error="No OAuth token found in keychain")
 
     # Run curl in subprocess to avoid adding httpx/aiohttp dependency
@@ -118,8 +130,13 @@ def format_reset_time(dt: datetime | None) -> str:
     local_dt = dt.astimezone()
     now = datetime.now().astimezone()
 
+    # Format hour without leading zero (cross-platform)
+    hour = local_dt.hour % 12 or 12
+    ampm = "am" if local_dt.hour < 12 else "pm"
+    time_str = f"{hour}{ampm}"
+
     # If same day, just show time
     if local_dt.date() == now.date():
-        return f"Resets {local_dt.strftime('%-I%p').lower()}"
+        return f"Resets {time_str}"
     else:
-        return f"Resets {local_dt.strftime('%b %-d')} at {local_dt.strftime('%-I%p').lower()}"
+        return f"Resets {local_dt.strftime('%b')} {local_dt.day} at {time_str}"

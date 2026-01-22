@@ -58,9 +58,11 @@ def main():
     except (KeyboardInterrupt, SystemExit):
         pass
     except Exception:
+        import tempfile
         import traceback
 
-        with open("/tmp/claudechic-crash.log", "w") as f:
+        crash_log = Path(tempfile.gettempdir()) / "claudechic-crash.log"
+        with open(crash_log, "w") as f:
             traceback.print_exc(file=f)
         raise
 

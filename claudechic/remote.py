@@ -32,15 +32,17 @@ _server: web.AppRunner | None = None
 
 
 async def handle_screenshot(request: web.Request) -> web.Response:
-    """Save screenshot. Query params: ?path=/tmp/shot.svg&format=svg|png
+    """Save screenshot. Query params: ?path=<tempdir>/shot.svg&format=svg|png
 
     For PNG, uses macOS qlmanage for conversion (falls back to SVG if unavailable).
     """
+    import tempfile
+
     if _app is None:
         return web.json_response({"error": "App not initialized"}, status=500)
 
     fmt = request.query.get("format", "svg")
-    default_path = f"/tmp/claudechic-screenshot.{fmt}"
+    default_path = str(Path(tempfile.gettempdir()) / f"claudechic-screenshot.{fmt}")
     path = request.query.get("path", default_path)
 
     try:

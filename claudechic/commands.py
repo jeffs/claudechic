@@ -183,7 +183,20 @@ def _handle_agent(app: "ChatApp", command: str) -> bool:
 
 
 def _handle_shell(app: "ChatApp", command: str) -> bool:
-    """Run shell command inline, or interactive shell if no command or -i flag."""
+    """Run shell command inline, or interactive shell if no command or -i flag.
+
+    NOTE: On Windows, only interactive mode is supported (no PTY capture).
+    """
+    import sys
+
+    # Windows doesn't have PTY support for captured output
+    if sys.platform == "win32":
+        app.notify(
+            "Shell command not fully supported on Windows. Use Claude's Bash tool.",
+            severity="warning",
+        )
+        return True
+
     parts = command.split(maxsplit=1)
     cmd = parts[1] if len(parts) > 1 else None
 
@@ -219,20 +232,29 @@ def _handle_shell(app: "ChatApp", command: str) -> bool:
             subprocess.run(args, cwd=cwd, env=env)
             # If command was fast, wait for keypress so user can see output
             if cmd and time.monotonic() - start < 1.0:
-                import sys
-                import termios
-                import tty
-
-                print("\nPress any key to continue...", end="", flush=True)
-                fd = sys.stdin.fileno()
-                old = termios.tcgetattr(fd)
-                try:
-                    tty.setraw(fd)
-                    sys.stdin.read(1)
-                finally:
-                    termios.tcsetattr(fd, termios.TCSADRAIN, old)
+                _wait_for_keypress()
 
     return True
+
+
+def _wait_for_keypress() -> None:
+    """Wait for a keypress. Cross-platform (Unix uses termios, Windows uses input)."""
+    import sys
+
+    if sys.platform == "win32":
+        input("\nPress Enter to continue...")
+    else:
+        import termios
+        import tty
+
+        print("\nPress any key to continue...", end="", flush=True)
+        fd = sys.stdin.fileno()
+        old = termios.tcgetattr(fd)
+        try:
+            tty.setraw(fd)
+            sys.stdin.read(1)
+        finally:
+            termios.tcsetattr(fd, termios.TCSADRAIN, old)
 
 
 def _handle_bang(app: "ChatApp", command: str) -> bool:

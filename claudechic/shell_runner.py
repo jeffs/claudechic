@@ -1,9 +1,20 @@
-"""PTY-based shell command execution with color support."""
+"""PTY-based shell command execution with color support.
+
+NOTE: PTY support is Unix-only. On Windows, run_in_pty raises NotImplementedError.
+Use the fallback in commands.py for Windows (interactive shell via subprocess).
+"""
 
 import os
-import pty
-import select
 import subprocess
+import sys
+from typing import TYPE_CHECKING
+
+# PTY support is Unix-only
+UNIX_PTY_SUPPORT = sys.platform != "win32"
+
+if UNIX_PTY_SUPPORT or TYPE_CHECKING:
+    import pty
+    import select
 
 
 def run_in_pty(
@@ -12,7 +23,12 @@ def run_in_pty(
     """Run command in PTY to capture colors.
 
     Returns (output, returncode) tuple.
+
+    Raises NotImplementedError on Windows (PTY not available).
     """
+    if not UNIX_PTY_SUPPORT:
+        raise NotImplementedError("PTY shell execution is not available on Windows")
+
     master_fd, slave_fd = pty.openpty()
     try:
         proc = subprocess.Popen(

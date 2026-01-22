@@ -1,6 +1,12 @@
-"""Background process tracking and detection for Claude agents."""
+"""Background process tracking and detection for Claude agents.
+
+NOTE: Process tracking relies on Unix shell process names (zsh, bash, sh).
+On Windows, this module returns empty results since shell processes are
+named differently (cmd.exe, powershell.exe).
+"""
 
 import re
+import sys
 from dataclasses import dataclass
 from datetime import datetime
 
@@ -59,8 +65,13 @@ def get_child_processes(claude_pid: int) -> list[BackgroundProcess]:
         claude_pid: PID of the claude binary for an agent
 
     Returns:
-        List of BackgroundProcess objects for active shell children
+        List of BackgroundProcess objects for active shell children.
+        Returns empty list on Windows (shell process names differ).
     """
+    # Skip on Windows - shell processes have different names (cmd.exe, powershell.exe)
+    if sys.platform == "win32":
+        return []
+
     try:
         claude_proc = psutil.Process(claude_pid)
     except (psutil.NoSuchProcess, psutil.AccessDenied):

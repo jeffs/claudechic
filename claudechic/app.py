@@ -1073,7 +1073,11 @@ class ChatApp(App):
         # If shell command is running, kill it
         if self._shell_process is not None:
             try:
-                os.killpg(self._shell_process.pid, 15)  # SIGTERM to process group
+                # os.killpg is Unix-only; fall back to terminate() on Windows
+                if sys.platform != "win32":
+                    os.killpg(self._shell_process.pid, 15)  # SIGTERM to process group
+                else:
+                    self._shell_process.terminate()
             except (ProcessLookupError, OSError):
                 self._shell_process.terminate()
             return

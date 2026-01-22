@@ -22,13 +22,15 @@ def get_project_sessions_dir(cwd: Path | None = None) -> Path | None:
     """Get the sessions directory for a project.
 
     Claude stores sessions in ~/.claude/projects/-path-to-project
-    with dashes instead of slashes.
+    with dashes instead of slashes (or backslashes on Windows).
 
     Args:
         cwd: Project directory. If None, uses current working directory.
     """
     cwd = (cwd or Path.cwd()).absolute()
-    project_key = str(cwd).replace("/", "-")
+    # Replace path separators with dashes (handles both / and \ on Windows)
+    # Also remove Windows drive colon (C:\foo -> C-foo)
+    project_key = str(cwd).replace(os.sep, "-").replace(":", "")
     sessions_dir = Path.home() / ".claude/projects" / project_key
     return sessions_dir if sessions_dir.exists() else None
 
