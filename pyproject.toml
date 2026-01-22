@@ -1,6 +1,6 @@
 [project]
 name = "claudechic"
-version = "0.2.6"
+version = "0.3.0"
 description = "Claude Chic - A stylish terminal UI for Claude Code"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -16,10 +16,12 @@ dependencies = [
     "textual-autocomplete>=4.0.6",
 ]
 authors = [{ name = "Matthew Rocklin", email = "mrocklin@gmail.com" }]
+license = "MIT"
 classifiers = [
     "Development Status :: 4 - Beta",
     "Environment :: Console",
     "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
