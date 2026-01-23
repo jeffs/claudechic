@@ -118,7 +118,6 @@ BaseToolWidget {
 
 BaseToolWidget:hover {
     border-left: wide $panel-lighten-2;
-    background: $surface;
 }
 
 /* Error messages - red, like user messages but indicating problems */
@@ -206,7 +205,6 @@ ShellOutputWidget {
 
 ShellOutputWidget:hover {
     border-left: wide $warning-lighten-1;
-    background: $surface;
 }
 
 ShellOutputWidget #shell-output {
@@ -416,9 +414,14 @@ ToolUseWidget Collapsible.error.-collapsed {
 
 ToolUseWidget Collapsible CollapsibleTitle {
     color: $text-muted;
-    padding: 0 0;
+    padding: 0;
     width: 100%;
     background: transparent;
+}
+
+/* Add breathing room when expanded */
+ToolUseWidget Collapsible.-expanded CollapsibleTitle {
+    padding: 1 0;
 }
 
 ToolUseWidget Collapsible CollapsibleTitle:hover {
@@ -428,6 +431,25 @@ ToolUseWidget Collapsible CollapsibleTitle:hover {
 ToolUseWidget Collapsible Contents {
     padding: 0 0 0 2;
     background: transparent;
+}
+
+/* Tool input/output sections - clean with breathing room */
+ToolUseWidget #tool-input {
+    padding: 1 0 0 1;
+    margin: 0;
+}
+
+ToolUseWidget #tool-separator {
+    color: $panel;
+    padding: 0;
+    margin: 0;
+    height: 1;
+}
+
+ToolUseWidget #tool-output {
+    padding: 0 0 1 1;
+    margin: 0;
+    overflow-x: auto;
 }
 
 /* Footer indicators (CPU and context bars) */

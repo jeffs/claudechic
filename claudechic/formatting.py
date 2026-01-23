@@ -262,43 +262,41 @@ def format_diff_text(old: str, new: str, max_len: int = 300) -> Text:
     return result
 
 
-def format_tool_details(name: str, input: dict, cwd: Path | None = None) -> str:
-    """Format expanded details for a tool use (non-Edit tools)."""
+def format_tool_input(name: str, input: dict, cwd: Path | None = None) -> str:
+    """Format plain-text input for a tool use (no markdown)."""
     if name == ToolName.WRITE:
-        path = make_relative(input.get("file_path", "?"), cwd)
         content = input.get("content", "")
-        lang = get_lang_from_path(path)
         preview = content[:400] + ("..." if len(content) > 400 else "")
-        return f"```{lang}\n{preview}\n```"
+        return preview
     elif name == ToolName.READ:
         path = make_relative(input.get("file_path", "?"), cwd)
         offset = input.get("offset")
         limit = input.get("limit")
-        details = f"**File:** `{path}`"
-        # Only show line range if offset/limit are valid integers
         if isinstance(offset, int) or isinstance(limit, int):
             start = offset if isinstance(offset, int) else 0
             end = start + limit if isinstance(limit, int) else "end"
-            details += f"\nLines: {start} - {end}"
-        return details
+            return f"{path} (lines {start}-{end})"
+        return path
     elif name == ToolName.BASH:
-        cmd = input.get("command", "?")
-        return f"```bash\n{cmd}\n```"
+        return input.get("command", "?")
     elif name == ToolName.GLOB:
         pattern = input.get("pattern", "?")
-        path = input.get("path", ".")
-        return f"**Pattern:** `{pattern}`\n**Path:** `{path}`"
+        path = input.get("path")
+        if path and path != ".":
+            return f"{pattern} in {path}"
+        return pattern
     elif name == ToolName.GREP:
         pattern = input.get("pattern", "?")
-        path = input.get("path", ".")
-        return f"**Pattern:** `{pattern}`\n**Path:** `{path}`"
+        path = input.get("path")
+        if path and path != ".":
+            return f"{pattern} in {path}"
+        return pattern
     elif name == ToolName.ENTER_PLAN_MODE:
-        return "*Entering plan mode*"
+        return "Entering plan mode"
     elif name == ToolName.EXIT_PLAN_MODE:
-        return "*Exiting plan mode*"
+        return "Exiting plan mode"
     elif name == ToolName.SKILL:
-        # Header already shows skill name, args are optional extra detail
         args = input.get("args", "")
-        return f"*{args}*" if args else ""
+        return args if args else ""
     else:
-        return f"```\n{json.dumps(input, indent=2)}\n```"
+        return json.dumps(input, indent=2)

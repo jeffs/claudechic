@@ -19,9 +19,8 @@ from claude_agent_sdk import ToolUseBlock, ToolResultBlock
 from claudechic.enums import ToolName
 from claudechic.formatting import (
     format_tool_header,
-    format_tool_details,
+    format_tool_input,
     format_result_summary,
-    get_lang_from_path,
     make_relative,
 )
 from claudechic.widgets.content.diff import DiffWidget
@@ -113,10 +112,12 @@ class ToolUseWidget(BaseToolWidget):
                     id="diff-content",
                 )
             else:
-                details = format_tool_details(
+                tool_input = format_tool_input(
                     self.block.name, self.block.input, self._cwd
                 )
-                yield Markdown(details.rstrip(), id="md-content")
+                yield Static(tool_input, id="tool-input")
+                yield Static("─" * 40, id="tool-separator")
+                yield Static("", id="tool-output")
 
     def stop_spinner(self) -> None:
         """Stop and remove the spinner."""
@@ -179,11 +180,11 @@ class ToolUseWidget(BaseToolWidget):
                 )
                 if summary:
                     collapsible.title = f"{self._header} {summary}"
-            # Edit uses Static for diff, others use Markdown
+            # Edit uses DiffWidget, skip output update
             if self.block.name == ToolName.EDIT:
                 return
-            md = collapsible.query_one("#md-content", Markdown)
-            details = format_tool_details(self.block.name, self.block.input, self._cwd)
+            # Update tool-output Static with plain text result
+            output_widget = collapsible.query_one("#tool-output", Static)
             if result.content:
                 content = (
                     result.content
@@ -194,19 +195,16 @@ class ToolUseWidget(BaseToolWidget):
                 content = SYSTEM_REMINDER_PATTERN.sub("", content)
                 truncated = len(content) > 2000
                 preview = content[:2000]
-                trunc_chars = (
+                trunc_suffix = (
                     f"\n... (truncated, {len(content):,} chars total)"
                     if truncated
                     else ""
                 )
                 if result.is_error:
-                    details += f"\n\n**Error:**\n```\n{preview}{trunc_chars}\n```"
+                    output_widget.update(f"Error:\n{preview}{trunc_suffix}")
                 elif self.block.name == ToolName.READ:
-                    lang = get_lang_from_path(self.block.input.get("file_path", ""))
-                    # Replace arrow with space in line number gutter
-                    preview = re.sub(
-                        r"^(\s*\d+)→", r"\1  ", preview, flags=re.MULTILINE
-                    )
+                    # Strip line number gutter (format: "   1→ content")
+                    preview = re.sub(r"^\s*\d+→\t?", "", preview, flags=re.MULTILINE)
                     if truncated:
                         shown = preview.count("\n") + (
                             1 if preview and not preview.endswith("\n") else 0
@@ -215,14 +213,12 @@ class ToolUseWidget(BaseToolWidget):
                             1 if content and not content.endswith("\n") else 0
                         )
                         preview += f"\n... ({shown} of {total} lines shown)"
-                    details += f"\n\n```{lang}\n{preview}\n```"
-                elif self.block.name in (ToolName.BASH, ToolName.GREP, ToolName.GLOB):
-                    details += f"\n\n```text\n{preview}{trunc_chars}\n```"
+                    output_widget.update(preview)
                 elif self.block.name == ToolName.EXIT_PLAN_MODE:
-                    # Extract plan from result and render as markdown
+                    # Extract plan from result and render
                     plan = self._extract_plan_from_result(content)
                     if plan:
-                        details = plan
+                        output_widget.update(plan)
                     # Add View Plan button if we can find the path
                     plan_match = PLAN_PATH_PATTERN.search(content)
                     if plan_match:
@@ -231,10 +227,9 @@ class ToolUseWidget(BaseToolWidget):
                             Button("📋 View Plan in Editor", classes="edit-plan-btn")
                         )
                 elif self.block.name == ToolName.ENTER_PLAN_MODE:
-                    details = "*Entered plan mode*"
+                    output_widget.update("Entered plan mode")
                 else:
-                    details += f"\n\n{preview}"
-            md.update(details.rstrip())
+                    output_widget.update(f"{preview}{trunc_suffix}")
         except Exception:
             pass  # Widget may not be fully mounted
 
