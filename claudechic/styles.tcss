@@ -111,18 +111,18 @@ ModelLabel:hover {
 }
 
 #vi-mode-label.vi-insert {
-    background: #005f00;
-    color: #afd7af;
+    background: $success;
+    color: $background;
 }
 
 #vi-mode-label.vi-normal {
-    background: #005f5f;
-    color: #afd7ff;
+    background: $primary;
+    color: $background;
 }
 
 #vi-mode-label.vi-visual {
-    background: #5f005f;
-    color: #ffafd7;
+    background: $warning;
+    color: $background;
 }
 
 /* Shared block styling - all content blocks */

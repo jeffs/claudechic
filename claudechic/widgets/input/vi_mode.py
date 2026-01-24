@@ -109,10 +109,16 @@ class ViHandler:
         state = self.state
         ta = self.text_area
 
-        # Handle pending 'g' commands
+        # Handle pending 'g' commands (check operator first for dgg/cgg/ygg)
         if state.pending_g:
             state.pending_g = False
             if character == "g":
+                if state.pending_operator:
+                    # dgg, cgg, ygg - operator to start of document
+                    op = state.pending_operator
+                    self._execute_operator_motion(op, "doc_start")
+                    state.reset_pending()
+                    return True
                 # gg - go to start
                 ta.move_cursor((0, 0))
                 state.reset_pending()
@@ -180,6 +186,42 @@ class ViHandler:
             # Start selection at current position
             loc = ta.cursor_location
             self._set_selection(loc, loc)
+            state.reset_pending()
+            return True
+
+        # Operators with pending operator (must come before navigation!)
+        if state.pending_operator:
+            # Allow count after operator (e.g., d3w)
+            if character and character.isdigit():
+                state.pending_count += character
+                return True
+            # 'g' sets pending_g, handled at top of _handle_normal_key
+            if character == "g":
+                state.pending_g = True
+                return True
+            op = state.pending_operator
+            count = state.get_count()
+            if character == "w":
+                self._execute_operator_motion(op, "word_right", count)
+                state.reset_pending()
+                return True
+            if character == "b":
+                self._execute_operator_motion(op, "word_left", count)
+                state.reset_pending()
+                return True
+            if character == "$":
+                self._execute_operator_motion(op, "line_end", count)
+                state.reset_pending()
+                return True
+            if character == "0":
+                self._execute_operator_motion(op, "line_start", count)
+                state.reset_pending()
+                return True
+            if character == "G":
+                self._execute_operator_motion(op, "doc_end", count)
+                state.reset_pending()
+                return True
+            # Unknown motion - cancel
             state.reset_pending()
             return True
 
@@ -260,29 +302,6 @@ class ViHandler:
                 state.reset_pending()
                 return True
             state.pending_operator = character
-            return True
-
-        # Immediate operators with pending operator
-        if state.pending_operator:
-            op = state.pending_operator
-            if character == "w":
-                self._execute_operator_motion(op, "word_right")
-                state.reset_pending()
-                return True
-            if character == "b":
-                self._execute_operator_motion(op, "word_left")
-                state.reset_pending()
-                return True
-            if character == "$":
-                self._execute_operator_motion(op, "line_end")
-                state.reset_pending()
-                return True
-            if character == "0":
-                self._execute_operator_motion(op, "line_start")
-                state.reset_pending()
-                return True
-            # Unknown motion - cancel
-            state.reset_pending()
             return True
 
         # Standalone editing commands
@@ -555,21 +574,27 @@ class ViHandler:
             self._set_mode(ViMode.INSERT)
             state.last_change = ("cc",)
 
-    def _execute_operator_motion(self, op: str, motion: str) -> None:
-        """Execute operator with motion (dw, cw, y$, etc.)."""
+    def _execute_operator_motion(self, op: str, motion: str, count: int = 1) -> None:
+        """Execute operator with motion (dw, cw, y$, d3w, etc.)."""
         ta = self.text_area
         state = self.state
         start = ta.cursor_location
 
-        # Execute motion
+        # Execute motion (with count)
         if motion == "word_right":
-            ta.action_cursor_word_right()
+            for _ in range(count):
+                ta.action_cursor_word_right()
         elif motion == "word_left":
-            ta.action_cursor_word_left()
+            for _ in range(count):
+                ta.action_cursor_word_left()
         elif motion == "line_end":
             ta.action_cursor_line_end()
         elif motion == "line_start":
             ta.action_cursor_line_start()
+        elif motion == "doc_start":
+            ta.move_cursor((0, 0))
+        elif motion == "doc_end":
+            ta.move_cursor(ta.document.end)
 
         end = ta.cursor_location
 

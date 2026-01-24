@@ -1340,11 +1340,20 @@ class ChatApp(App):
             return
 
         # Interrupt running agent - send interrupt to SDK
-        if self.client:
+        if self.client and self._agent and self._agent.status == "busy":
             self.run_worker(self.client.interrupt(), exclusive=False)
             self._hide_thinking()
             self.notify("Interrupted")
             self.chat_input.focus()
+            return
+
+        # Vi-mode: switch from INSERT to NORMAL mode
+        from claudechic.widgets.input.vi_mode import ViMode
+
+        if self.chat_input.vi_mode == ViMode.INSERT:
+            if self.chat_input._vi_handler:
+                self.chat_input._vi_handler.handle_key("escape", None)
+            return
 
     def on_agent_item_selected(self, event: AgentItem.Selected) -> None:
         """Handle agent selection from sidebar."""
@@ -2105,7 +2114,7 @@ class ChatApp(App):
     def _update_vi_mode(self, enabled: bool) -> None:
         """Update vi-mode on all ChatInput widgets and footer."""
         try:
-            chat_input = self.query_one("#chat-input", ChatInput)
+            chat_input = self.query_one("#input", ChatInput)
             chat_input.enable_vi_mode(enabled)
             # Update footer with initial mode
             mode = chat_input.vi_mode if enabled else None
