@@ -23,6 +23,9 @@ def _load_config() -> dict:
     # Migrate from old config path if it exists and new doesn't
     if not CONFIG_PATH.exists() and _OLD_CONFIG_PATH.exists():
         _OLD_CONFIG_PATH.rename(CONFIG_PATH)
+    elif _OLD_CONFIG_PATH.exists():
+        # Clean up old config file if new one already exists
+        _OLD_CONFIG_PATH.unlink()
 
     if CONFIG_PATH.exists():
         with open(CONFIG_PATH, encoding="utf-8") as f:
