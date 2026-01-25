@@ -431,6 +431,10 @@ def _handle_cleanup(app: "ChatApp", branches: list[str] | None) -> None:
     # Close agents for successfully removed worktrees
     _close_agents_for_branches(app, removed)
 
+    # Remove ghost worktrees from sidebar
+    for branch in removed:
+        app.agent_section.remove_worktree(branch)
+
     # Report results
     for branch in removed:
         app.notify(f"Removed: {branch}")
@@ -475,6 +479,9 @@ async def _run_cleanup_prompt(
                     severity="error" if not success else "information",
                 )
         _close_agents_for_branches(app, removed)
+        # Remove ghost worktrees from sidebar
+        for branch in removed:
+            app.agent_section.remove_worktree(branch)
     else:
         app.notify("Cleanup cancelled")
 
