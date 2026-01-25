@@ -18,6 +18,56 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from claudechic.app import ChatApp
 
+# Commands that should always run in interactive mode (TUI editors, pagers, etc.)
+INTERACTIVE_COMMANDS = frozenset(
+    {
+        "nvim",
+        "vim",
+        "vi",
+        "nano",
+        "emacs",
+        "pico",
+        "joe",
+        "micro",  # editors
+        "less",
+        "more",
+        "most",  # pagers
+        "htop",
+        "top",
+        "btop",
+        "glances",  # monitors
+        "tmux",
+        "screen",  # terminal multiplexers
+        "mc",
+        "ranger",
+        "nnn",
+        "lf",  # file managers
+        "python",
+        "python3",
+        "ipython",
+        "bpython",  # REPLs
+        "node",
+        "irb",
+        "ghci",
+        "lua",  # more REPLs
+        "psql",
+        "mysql",
+        "sqlite3",  # database CLIs
+        "ssh",
+        "telnet",  # remote shells
+    }
+)
+
+# Two-word commands that use a pager by default
+INTERACTIVE_SUBCOMMANDS = frozenset(
+    {
+        "git diff",
+        "git log",
+        "git show",
+        "git blame",
+    }
+)
+
 # Command registry: (name, description, [variants for autocomplete])
 # Variants are additional completions like "/agent close" for "/agent"
 COMMANDS: list[tuple[str, str, list[str]]] = [
@@ -288,6 +338,17 @@ def _handle_shell(app: "ChatApp", command: str) -> bool:
     if cmd and cmd.startswith("-i "):
         interactive = True
         cmd = cmd[3:].lstrip()
+
+    # Auto-detect interactive commands from whitelist
+    if cmd and not interactive:
+        first_word = cmd.split()[0].split("/")[-1]  # Handle paths like /usr/bin/vim
+        if first_word in INTERACTIVE_COMMANDS:
+            interactive = True
+        # Check two-word subcommands (e.g., "git diff", "git log")
+        elif len(cmd.split()) >= 2:
+            two_words = " ".join(cmd.split()[:2])
+            if two_words in INTERACTIVE_SUBCOMMANDS:
+                interactive = True
 
     # Windows doesn't have PTY support for captured output - force interactive mode
     is_windows = sys.platform == "win32"

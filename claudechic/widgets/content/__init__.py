@@ -15,6 +15,7 @@ from claudechic.widgets.content.tools import (
     AgentToolWidget,
     AgentListWidget,
     ShellOutputWidget,
+    PendingShellWidget,
     EditPlanRequested,
 )
 from claudechic.widgets.content.diff import DiffWidget
@@ -33,6 +34,7 @@ __all__ = [
     "AgentToolWidget",
     "AgentListWidget",
     "ShellOutputWidget",
+    "PendingShellWidget",
     "EditPlanRequested",
     "DiffWidget",
     "TodoWidget",

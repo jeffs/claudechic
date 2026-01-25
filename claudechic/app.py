@@ -82,6 +82,7 @@ from claudechic.widgets import (
     FilesSection,
     HamburgerButton,
     EditPlanRequested,
+    PendingShellWidget,
 )
 from claudechic.widgets.layout.footer import AutoEditLabel, ModelLabel, StatusFooter
 from claudechic.widgets.prompts import ModelPrompt
@@ -158,6 +159,8 @@ class ChatApp(App):
         self._status_footer: StatusFooter | None = None
         # Track running shell command for Ctrl+C cancellation
         self._shell_process: asyncio.subprocess.Process | None = None
+        # Pending shell cancel handlers (widget_id -> callback)
+        self._pending_shell_cancels: dict[int, Any] = {}
         # Agent-to-UI mappings (Agent has no UI references)
         self._chat_views: dict[str, ChatView] = {}  # agent_id -> ChatView
         self._agent_metadata: dict[
@@ -1132,6 +1135,14 @@ class ChatApp(App):
         """Handle history search cancellation."""
         self.chat_input.focus()
 
+    def on_pending_shell_widget_cancelled(
+        self, event: "PendingShellWidget.Cancelled"
+    ) -> None:
+        """Handle shell command cancellation from widget."""
+        handler = self._pending_shell_cancels.get(id(event.widget))
+        if handler:
+            handler(event)
+
     def on_mouse_up(self, event: MouseUp) -> None:
         # Close sidebar overlay if clicking outside of it
         if self._sidebar_overlay_open:
@@ -1215,57 +1226,62 @@ class ChatApp(App):
         self, cmd: str, shell: str, cwd: str | None, env: dict[str, str]
     ) -> None:
         """Run a shell command async with PTY for color support."""
-        from claudechic.shell_runner import run_in_pty
-        from claudechic.widgets import ShellOutputWidget
-        from claudechic.widgets.content.message import Spinner
+        from claudechic.shell_runner import run_in_pty_cancellable
+        from claudechic.widgets import PendingShellWidget, ShellOutputWidget
 
         chat_view = self._chat_view
         if not chat_view:
             return
 
-        # Create spinner widget
-        spinner = Spinner(
-            f"Running: {cmd[:50]}..." if len(cmd) > 50 else f"Running: {cmd}"
-        )
-        spinner.add_class("shell-spinner")
-        chat_view.mount(spinner)
+        # Create pending widget with cancel button
+        pending_widget = PendingShellWidget(cmd)
+        chat_view.mount(pending_widget)
         chat_view.scroll_if_tailing()
 
-        async def _run() -> None:
-            tip_shown = False
-            loop = asyncio.get_event_loop()
+        # Store cancel flag that can be set by the widget
+        cancel_event = asyncio.Event()
 
+        def on_cancel(message: PendingShellWidget.Cancelled) -> None:
+            if message.widget is pending_widget:
+                cancel_event.set()
+
+        self._pending_shell_cancels[id(pending_widget)] = on_cancel
+
+        async def _run() -> None:
             try:
-                # Show tip after 1 second if still running
+                # Show tip after 1 second if command is still running
                 async def show_tip_after_delay() -> None:
-                    nonlocal tip_shown
                     await asyncio.sleep(1.0)
-                    if not tip_shown:
-                        tip_shown = True
-                        self.notify(
-                            "Tip: Use /shell alone for interactive commands", timeout=5
-                        )
+                    self.notify("Tip: Use -i flag for interactive commands", timeout=5)
 
                 tip_task = asyncio.create_task(show_tip_after_delay())
 
-                output, returncode = await loop.run_in_executor(
-                    None, run_in_pty, cmd, shell, cwd, env
+                output, returncode, was_cancelled = await run_in_pty_cancellable(
+                    cmd, shell, cwd, env, cancel_event
                 )
                 tip_task.cancel()
 
-                # Remove spinner and show output
-                spinner.remove()
-                widget = ShellOutputWidget(
-                    command=cmd,
-                    stdout=output,
-                    stderr="",
-                    returncode=returncode,
-                )
-                chat_view.mount(widget)
-                chat_view.scroll_if_tailing()
+                # Clean up cancel handler
+                self._pending_shell_cancels.pop(id(pending_widget), None)
+
+                # Remove pending widget
+                pending_widget.remove()
+
+                if was_cancelled:
+                    self.notify("Command cancelled")
+                else:
+                    widget = ShellOutputWidget(
+                        command=cmd,
+                        stdout=output,
+                        stderr="",
+                        returncode=returncode,
+                    )
+                    chat_view.mount(widget)
+                    chat_view.scroll_if_tailing()
 
             except asyncio.CancelledError:
-                spinner.remove()
+                self._pending_shell_cancels.pop(id(pending_widget), None)
+                pending_widget.remove()
                 self.notify("Command cancelled")
 
         self.run_worker(_run(), exclusive=False)

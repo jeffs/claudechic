@@ -356,6 +356,60 @@ class ShellOutputWidget(Static, ClickableMixin):
                 yield Static(Text.from_ansi(output), id="shell-output")
 
 
+class PendingShellWidget(Static):
+    """Widget showing a running shell command with cancel button."""
+
+    DEFAULT_CSS = """
+    PendingShellWidget {
+        border-left: thick $surface-darken-2;
+        padding: 0 1;
+        margin: 0 0 1 0;
+        layout: horizontal;
+        height: 1;
+    }
+    PendingShellWidget Spinner {
+        width: 1;
+    }
+    PendingShellWidget .cmd-text {
+        margin-left: 1;
+        color: $text-muted;
+        width: auto;
+        max-width: 40;
+    }
+    PendingShellWidget .cancel-btn {
+        margin-left: 1;
+        background: $error-darken-1;
+        color: $text;
+        padding: 0 1;
+        width: auto;
+    }
+    PendingShellWidget .cancel-btn:hover {
+        background: $error;
+    }
+    """
+
+    class Cancelled(Message):
+        """Emitted when user clicks cancel."""
+
+        def __init__(self, widget: "PendingShellWidget") -> None:
+            super().__init__()
+            self.widget = widget
+
+    def __init__(self, command: str) -> None:
+        super().__init__()
+        self.command = command
+
+    def compose(self) -> ComposeResult:
+        yield Spinner()
+        yield Static(self.command, classes="cmd-text", markup=False)
+        yield Button("Cancel", classes="cancel-btn")
+
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        """Handle cancel button click."""
+        event.stop()
+        self.post_message(self.Cancelled(self))
+
+
 class AgentListWidget(Static):
     """Formatted widget for displaying agent list from list_agents."""
 
