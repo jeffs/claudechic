@@ -879,6 +879,12 @@ class ChatApp(App):
         self, message: str, severity: str, agent_id: str | None
     ) -> None:
         """Show system info message in chat view (not stored in history)."""
+        from claudechic.filters import should_filter_message
+
+        if should_filter_message(message):
+            log.debug("Filtered system message: %s", message[:100])
+            return
+
         chat_view = self._get_chat_view(agent_id)
         if not chat_view:
             # Fallback to notify if no chat view
