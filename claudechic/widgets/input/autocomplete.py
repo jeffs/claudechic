@@ -563,11 +563,11 @@ class TextAreaAutoComplete(Widget):
             target.text = value
             target.move_cursor((0, len(value)))
         elif self._mode == "path":
-            # Replace @query with the selected path (keep the @)
+            # Replace @query with the selected path (keep the @), add trailing space
             replace_start = self._trigger_pos + 1  # After @
-            new_text = text[:replace_start] + value + text[cursor_pos:]
+            new_text = text[:replace_start] + value + " " + text[cursor_pos:]
             target.text = new_text
-            new_cursor = replace_start + len(value)
+            new_cursor = replace_start + len(value) + 1  # +1 for space
             # Convert linear position to (row, col)
             lines = new_text[:new_cursor].split("\n")
             row = len(lines) - 1
