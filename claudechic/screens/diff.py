@@ -73,7 +73,7 @@ class DiffScreen(Screen[list[HunkComment]]):
                 if self._target != "HEAD"
                 else "No uncommitted changes"
             )
-            self.mount(Static(msg, id="diff-empty"))
+            self.mount(Static(msg, id="diff-empty", markup=False))
             return
 
         # Build diff UI

@@ -465,7 +465,7 @@ class AgentListWidget(Static):
         max_name = max(len(a[1]) for a in self._agents)
         for indicator, name, path in self._agents:
             padded = name.ljust(max_name)
-            yield Static(f"{indicator} {padded}  {path}")
+            yield Static(f"{indicator} {padded}  {path}", markup=False)
 
 
 class AgentToolWidget(BaseToolWidget):
