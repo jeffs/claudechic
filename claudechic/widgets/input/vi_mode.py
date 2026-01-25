@@ -149,7 +149,9 @@ class ViHandler:
             # Handle visual mode motions (extend selection)
             return self._handle_visual_key(key, character)
 
-        # NORMAL mode
+        # NORMAL mode - let escape bubble up for agent interrupt
+        if key == "escape":
+            return False
         return self._handle_normal_key(key, character)
 
     def _handle_normal_key(self, key: str, character: str | None) -> bool:

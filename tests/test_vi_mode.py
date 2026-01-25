@@ -89,6 +89,14 @@ class TestModeSwitch:
         handler.handle_key("escape", None)
         assert handler.state.mode == ViMode.NORMAL
 
+    def test_escape_in_normal_bubbles_up(self, handler):
+        """Escape in NORMAL mode should not be consumed (allows agent interrupt)."""
+        from claudechic.widgets.input.vi_mode import ViMode
+
+        handler.state.mode = ViMode.NORMAL
+        consumed = handler.handle_key("escape", None)
+        assert not consumed  # Should bubble up to trigger action_escape
+
 
 class TestNavigation:
     """Test navigation commands."""
