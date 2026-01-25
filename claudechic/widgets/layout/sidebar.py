@@ -199,11 +199,18 @@ class FileItem(SidebarItem):
 
     max_name_length: int = 14
 
-    def __init__(self, file_path: Path, additions: int = 0, deletions: int = 0) -> None:
+    def __init__(
+        self,
+        file_path: Path,
+        additions: int = 0,
+        deletions: int = 0,
+        untracked: bool = False,
+    ) -> None:
         super().__init__()
         self.file_path = file_path
         self.additions = additions
         self.deletions = deletions
+        self.untracked = untracked
 
     def _truncate_front(self, name: str) -> str:
         """Truncate from front with ellipsis if too long."""
@@ -214,7 +221,10 @@ class FileItem(SidebarItem):
     def render(self) -> Text:
         """Render the file item text."""
         name = self._truncate_front(str(self.file_path))
-        parts: list[tuple[str, str]] = [(name, "dim")]
+        parts: list[tuple[str, str]] = []
+        if self.untracked:
+            parts.append(("U ", "dim yellow"))
+        parts.append((name, "dim"))
         if self.additions:
             parts.append((f" +{self.additions}", "dim green"))
         if self.deletions:
@@ -253,10 +263,10 @@ class FilesSection(SidebarSection):
             item.set_class(compact, "compact")
 
     def _make_file_item(
-        self, file_path: Path, additions: int, deletions: int
+        self, file_path: Path, additions: int, deletions: int, untracked: bool = False
     ) -> FileItem:
         """Create a FileItem with proper ID and styling."""
-        item = FileItem(file_path, additions, deletions)
+        item = FileItem(file_path, additions, deletions, untracked)
         safe_id = str(file_path).replace("/", "-").replace(".", "-").replace(" ", "-")
         item.id = f"file-{safe_id}"
         item.set_class(self._compact, "compact")
@@ -276,12 +286,12 @@ class FilesSection(SidebarSection):
         if self._files:
             self.remove_class("hidden")
 
-    def mount_all_files(self, files: dict[Path, tuple[int, int]]) -> None:
+    def mount_all_files(self, files: dict[Path, tuple[int, int, bool]]) -> None:
         """Mount multiple files at once."""
         items = []
-        for file_path, (additions, deletions) in files.items():
+        for file_path, (additions, deletions, untracked) in files.items():
             if file_path not in self._files:
-                item = self._make_file_item(file_path, additions, deletions)
+                item = self._make_file_item(file_path, additions, deletions, untracked)
                 self._files[file_path] = item
                 items.append(item)
         if items:

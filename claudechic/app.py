@@ -293,7 +293,9 @@ class ChatApp(App):
             # Fetch fresh from git
             stats = await get_file_stats(str(agent.cwd))
             if stats:
-                files = {Path(s.path): (s.additions, s.deletions) for s in stats}
+                files = {
+                    Path(s.path): (s.additions, s.deletions, s.untracked) for s in stats
+                }
                 section.mount_all_files(files)
             else:
                 section.add_class("hidden")

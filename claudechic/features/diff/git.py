@@ -4,6 +4,7 @@ import asyncio
 import difflib
 import re
 from dataclasses import dataclass, field
+from pathlib import Path
 
 
 @dataclass
@@ -80,6 +81,7 @@ class FileStat:
     path: str
     additions: int
     deletions: int
+    untracked: bool = False
 
 
 async def get_file_stats(cwd: str, target: str = "HEAD") -> list[FileStat]:
@@ -128,7 +130,16 @@ async def get_file_stats(cwd: str, target: str = "HEAD") -> list[FileStat]:
         for line in stdout.decode().strip().split("\n"):
             if line and line not in seen_paths:
                 # New file - count lines as additions
-                stats.append(FileStat(path=line, additions=0, deletions=0))
+                try:
+                    content = Path(cwd, line).read_text()
+                    line_count = len(content.splitlines())
+                except (OSError, UnicodeDecodeError):
+                    line_count = 0
+                stats.append(
+                    FileStat(
+                        path=line, additions=line_count, deletions=0, untracked=True
+                    )
+                )
 
     return stats
 
@@ -169,7 +180,44 @@ async def get_changes(cwd: str, target: str = "HEAD") -> list[FileChange]:
         return files  # Return files without hunks
 
     diff_content = stdout.decode()
-    return _merge_diff_content(files, diff_content)
+    files = _merge_diff_content(files, diff_content)
+
+    # Add untracked files as synthetic diffs
+    proc = await asyncio.create_subprocess_exec(
+        "git",
+        "ls-files",
+        "--others",
+        "--exclude-standard",
+        cwd=cwd,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
+    )
+    stdout, _ = await proc.communicate()
+
+    if proc.returncode == 0:
+        tracked_paths = {f.path for f in files}
+        for line in stdout.decode().strip().split("\n"):
+            if line and line not in tracked_paths:
+                # Read file content and create synthetic diff
+                try:
+                    content = Path(cwd, line).read_text()
+                    lines = content.splitlines()
+                    hunk = Hunk(
+                        old_start=0,
+                        old_count=0,
+                        new_start=1,
+                        new_count=len(lines),
+                        old_lines=[],
+                        new_lines=lines,
+                    )
+                    files.append(
+                        FileChange(path=line, status="untracked", hunks=[hunk])
+                    )
+                except (OSError, UnicodeDecodeError):
+                    # Skip binary or unreadable files
+                    files.append(FileChange(path=line, status="untracked", hunks=[]))
+
+    return files
 
 
 def _parse_name_status(output: str) -> list[FileChange]:

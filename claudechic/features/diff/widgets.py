@@ -123,9 +123,13 @@ class DiffFileItem(Static):
 
     def compose(self) -> ComposeResult:
         # Status indicator - use primary color, red for deleted
-        indicator = {"modified": "M", "added": "A", "deleted": "D", "renamed": "R"}.get(
-            self.status, "?"
-        )
+        indicator = {
+            "modified": "M",
+            "added": "A",
+            "deleted": "D",
+            "renamed": "R",
+            "untracked": "U",
+        }.get(self.status, "?")
         color = "$primary" if self.status != "deleted" else "$error"
         # Show hunk count if > 1
         count_str = f" ({self.hunk_count})" if self.hunk_count > 1 else ""
