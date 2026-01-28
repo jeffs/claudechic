@@ -49,12 +49,25 @@ class Spinner(Static):
     def _tick_all() -> None:
         """Advance frame and refresh visible spinners only.
 
-        Uses region to check if spinner is actually visible on screen.
-        Spinners in hidden ChatViews have empty regions and are skipped.
+        Uses private Textual APIs (_layout_cache, _set_dirty, _repaint_required)
+        to avoid CSS recalculation on every frame. Falls back to refresh() if
+        these internals change.
         """
         Spinner._frame = (Spinner._frame + 1) % len(Spinner.FRAMES)
+        last_visible = None
         for spinner in list(Spinner._instances):
-            # Skip if not visible (region is empty when hidden or off-screen)
-            if not spinner.region.width:
+            if not spinner.region.width:  # Skip hidden spinners
                 continue
-            spinner.refresh(layout=False)
+            last_visible = spinner
+            try:
+                # Optimized: skip _rich_style_cache.clear() since spinner style never changes
+                spinner._layout_cache.clear()
+                spinner._set_dirty()
+                spinner._repaint_required = True
+            except (AttributeError, TypeError):
+                spinner.refresh(layout=False)
+
+        # check_idle() prompts Textual to process the repaint. Only need to call once
+        # per tick since it wakes the compositor for all dirty widgets.
+        if last_visible is not None:
+            last_visible.check_idle()
