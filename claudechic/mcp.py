@@ -248,19 +248,22 @@ def _make_tell_agent(caller_name: str | None = None):
 )
 async def list_agents(args: dict[str, Any]) -> dict[str, Any]:  # noqa: ARG001
     """List all agents and their status."""
-    if _app is None or _app.agent_mgr is None:
-        return _text_response("Error: App not initialized")
+    try:
+        if _app is None or _app.agent_mgr is None:
+            return _text_response("Error: App not initialized")
 
-    if len(_app.agent_mgr) == 0:
-        return _text_response("No agents running")
+        if len(_app.agent_mgr) == 0:
+            return _text_response("No agents running")
 
-    lines = ["Agents:"]
-    for i, agent in enumerate(_app.agent_mgr, 1):
-        active = "*" if agent.id == _app.agent_mgr.active_id else " "
-        wt = " (worktree)" if agent.worktree else ""
-        lines.append(f"{active}{i}. {agent.name} [{agent.status}] - {agent.cwd}{wt}")
+        lines = ["Agents:"]
+        for i, agent in enumerate(_app.agent_mgr, 1):
+            active = "*" if agent.id == _app.agent_mgr.active_id else " "
+            wt = " (worktree)" if agent.worktree else ""
+            lines.append(f"{active}{i}. {agent.name} [{agent.status}] - {agent.cwd}{wt}")
 
-    return _text_response("\n".join(lines))
+        return _text_response("\n".join(lines))
+    except Exception as e:
+        return _text_response(f"Error listing agents: {e}")
 
 
 @tool(
@@ -270,26 +273,29 @@ async def list_agents(args: dict[str, Any]) -> dict[str, Any]:  # noqa: ARG001
 )
 async def close_agent(args: dict[str, Any]) -> dict[str, Any]:
     """Close an agent."""
-    if _app is None or _app.agent_mgr is None:
-        return _text_response("Error: App not initialized")
+    try:
+        if _app is None or _app.agent_mgr is None:
+            return _text_response("Error: App not initialized")
 
-    name = args["name"]
+        name = args["name"]
 
-    # Can't close the last agent
-    if len(_app.agent_mgr) <= 1:
-        return _text_response("Error: Cannot close the last agent")
+        # Can't close the last agent
+        if len(_app.agent_mgr) <= 1:
+            return _text_response("Error: Cannot close the last agent")
 
-    agent, error = _find_agent_by_name(name)
-    if agent is None:
-        return _text_response(f"Error: {error}")
+        agent, error = _find_agent_by_name(name)
+        if agent is None:
+            return _text_response(f"Error: {error}")
 
-    agent_id = agent.id
-    agent_name = agent.name
+        agent_id = agent.id
+        agent_name = agent.name
 
-    # Use app's close method which handles UI cleanup
-    _app._do_close_agent(agent_id)
+        # Use app's close method which handles UI cleanup
+        _app._do_close_agent(agent_id)
 
-    return _text_response(f"Closed agent '{agent_name}'")
+        return _text_response(f"Closed agent '{agent_name}'")
+    except Exception as e:
+        return _text_response(f"Error closing agent: {e}")
 
 
 def create_chic_server(caller_name: str | None = None):

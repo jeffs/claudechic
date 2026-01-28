@@ -42,6 +42,20 @@ if TYPE_CHECKING:
 log = logging.getLogger(__name__)
 
 
+def _create_safe_task(coro, name: str | None = None) -> asyncio.Task:
+    """Create an asyncio task with exception handling to prevent crashes."""
+
+    async def wrapper():
+        try:
+            return await coro
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            log.exception(f"Task '{name or 'unnamed'}' failed")
+
+    return asyncio.create_task(wrapper(), name=name)
+
+
 # ---------------------------------------------------------------------------
 # Message types for chat history
 # ---------------------------------------------------------------------------
@@ -442,7 +456,7 @@ class Agent:
                 followup = self._pending_followup
                 self._pending_followup = None
                 # Schedule follow-up query after a brief delay to let UI update
-                asyncio.create_task(self._send_followup(followup))
+                _create_safe_task(self._send_followup(followup), name="send-followup")
 
         except asyncio.CancelledError:
             raise

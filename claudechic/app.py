@@ -111,6 +111,26 @@ def _categorize_cli_error(e: CLIConnectionError) -> str:
     return "unknown"
 
 
+def create_safe_task(
+    coro, name: str | None = None
+) -> asyncio.Task:
+    """Create an asyncio task with exception handling to prevent crashes.
+
+    Wraps the coroutine to catch and log exceptions rather than allowing
+    them to propagate as unhandled task exceptions which can crash the app.
+    """
+
+    async def wrapper():
+        try:
+            return await coro
+        except asyncio.CancelledError:
+            raise  # Let cancellation propagate
+        except Exception:
+            log.exception(f"Task '{name or 'unnamed'}' failed")
+
+    return asyncio.create_task(wrapper(), name=name)
+
+
 class ChatApp(App):
     """Main chat application.
 
@@ -840,7 +860,7 @@ class ChatApp(App):
             pass
 
         # Start async send (returns immediately, callbacks handle UI)
-        asyncio.create_task(
+        create_safe_task(
             agent.send(prompt, display_as=display_as), name=f"send-{agent.id}"
         )
 
@@ -1331,7 +1351,7 @@ class ChatApp(App):
                     await asyncio.sleep(1.0)
                     self.notify("Tip: Use -i flag for interactive commands", timeout=5)
 
-                tip_task = asyncio.create_task(show_tip_after_delay())
+                tip_task = create_safe_task(show_tip_after_delay(), name="tip-delay")
 
                 output, returncode, was_cancelled = await run_in_pty_cancellable(
                     cmd, shell, cwd, env, cancel_event
@@ -1876,7 +1896,7 @@ class ChatApp(App):
             self._position_right_sidebar()
 
             # Populate files section with uncommitted changes
-            asyncio.create_task(self._async_refresh_files(agent))
+            create_safe_task(self._async_refresh_files(agent), name="refresh-files")
         except Exception as e:
             log.exception(f"Failed to create agent UI: {e}")
 
@@ -1932,8 +1952,10 @@ class ChatApp(App):
             self._position_right_sidebar()
 
         # These happen outside batch (async/focus)
-        asyncio.create_task(self._async_refresh_files(new_agent))
-        asyncio.create_task(self.status_footer.refresh_branch(str(new_agent.cwd)))
+        create_safe_task(self._async_refresh_files(new_agent), name="refresh-files")
+        create_safe_task(
+            self.status_footer.refresh_branch(str(new_agent.cwd)), name="refresh-branch"
+        )
         self.chat_input.focus()
 
     def on_agent_closed(self, agent_id: str, message_count: int = 0) -> None:
@@ -2237,7 +2259,7 @@ class ChatApp(App):
                 if not request._event.is_set():
                     request.respond(string_to_result(raw))
 
-            asyncio.create_task(ui_response())
+            create_safe_task(ui_response(), name="ui-response")
             result = await request.wait()
 
         if result.choice == PermissionChoice.ALLOW_ALL:
