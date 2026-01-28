@@ -543,8 +543,11 @@ class ChatApp(App):
         context_file = files("claudechic").joinpath("context.md")
         system_prompt = context_file.read_text()
 
-        # Filter ANTHROPIC_API_KEY to prefer subscription auth
-        env = {k: v for k, v in os.environ.items() if k != "ANTHROPIC_API_KEY"}
+        # Override ANTHROPIC_API_KEY to prefer subscription auth,
+        # unless ANTHROPIC_BASE_URL is set (SSO proxy needs the key)
+        env: dict[str, str] = {}
+        if not os.environ.get("ANTHROPIC_BASE_URL"):
+            env["ANTHROPIC_API_KEY"] = ""
 
         return ClaudeAgentOptions(
             permission_mode="bypassPermissions"
