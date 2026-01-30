@@ -196,6 +196,11 @@ TaskWidget {
     border-left: wide $accent;
 }
 
+/* ExitPlanMode - prominent secondary color border */
+ToolUseWidget.exit-plan-mode {
+    border-left: thick $secondary;
+}
+
 /* Nested content inside tasks is indented */
 TaskWidget #task-content {
     padding-left: 2;

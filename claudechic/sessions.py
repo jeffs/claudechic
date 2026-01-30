@@ -258,9 +258,16 @@ async def load_session_messages(session_id: str, cwd: Path | None = None) -> lis
 
 
 async def get_plan_path_for_session(
-    session_id: str, cwd: Path | None = None
+    session_id: str, cwd: Path | None = None, must_exist: bool = True
 ) -> Path | None:
-    """Get the plan file path (~/.claude/plans/{slug}.md) for a session, if it exists."""
+    """Get the plan file path (~/.claude/plans/{slug}.md) for a session.
+
+    Args:
+        session_id: The session ID
+        cwd: Working directory for finding session file
+        must_exist: If True, only return path if file exists. If False, return
+                   the expected path even if file doesn't exist yet.
+    """
     session_file = _get_session_file(session_id, cwd)
     if not session_file:
         return None
@@ -289,7 +296,9 @@ async def get_plan_path_for_session(
         return None
 
     plan_path = Path.home() / ".claude" / "plans" / f"{slug}.md"
-    return plan_path if plan_path.exists() else None
+    if must_exist:
+        return plan_path if plan_path.exists() else None
+    return plan_path
 
 
 async def get_context_from_session(

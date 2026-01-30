@@ -36,6 +36,7 @@ from claudechic.enums import AgentStatus, PermissionChoice, ToolName
 from claudechic.features.worktree.git import FinishState
 from claudechic.file_index import FileIndex
 from claudechic.permissions import PermissionRequest
+from claudechic.sessions import get_plan_path_for_session
 from claudechic.tasks import create_safe_task
 
 if TYPE_CHECKING:
@@ -123,6 +124,14 @@ class Agent:
 
     # Tools to auto-approve when auto_approve_edits is True
     AUTO_EDIT_TOOLS = {ToolName.EDIT, ToolName.WRITE}
+
+    # Tools blocked in plan mode (read-only enforcement)
+    PLAN_MODE_BLOCKED_TOOLS = {
+        ToolName.EDIT,
+        ToolName.WRITE,
+        ToolName.BASH,
+        ToolName.NOTEBOOK_EDIT,
+    }
 
     def __init__(
         self,
@@ -422,9 +431,46 @@ class Agent:
     # Response processing
     # -----------------------------------------------------------------------
 
+    def _get_plan_mode_instructions(self) -> str:
+        """Get plan mode instructions with the plan file path.
+
+        Note: These are prepended to every message in plan mode (~400 tokens).
+        This is acceptable overhead for ensuring the agent follows the workflow.
+        """
+        plan_file_info = ""
+        if self.plan_path:
+            plan_file_info = f"\nPlan file: {self.plan_path}\nYou may ONLY write to this file. All other writes are blocked."
+        else:
+            plan_file_info = "\nPlan file: Will be created in ~/.claude/plans/ when you first write to it."
+
+        return f"""<system-reminder>
+PLAN MODE ACTIVE
+
+Workflow Phases:
+1. Initial Understanding - Launch up to 3 Explore agents in parallel to understand the codebase. Focus on comprehension.
+2. Design - Launch Plan agent(s) to design implementation based on exploration. Up to 3 agents for complex tasks.
+3. Review - Read critical files, ensure alignment with user intent, use AskUserQuestion for clarifications.
+4. Final Plan - Write concise but complete plan to the plan file. Include file paths and verification steps.
+5. Exit - Call ExitPlanMode when done. Your turn should only end with either AskUserQuestion or ExitPlanMode.
+
+Key Rules:
+- Use Explore subagent type in Phase 1
+- Don't make large assumptions - ask questions
+- Use AskUserQuestion for requirement clarification
+- Use ExitPlanMode for plan approval (never ask "is this plan okay?" via text)
+- Build plan incrementally by writing/editing the plan file
+- Edit, Write, Bash, and NotebookEdit are NOT available (except writing to the plan file)
+{plan_file_info}
+</system-reminder>
+"""
+
     async def _process_response(self, prompt: str) -> None:
         """Process SDK response stream."""
         try:
+            # Prepend plan mode instructions if in plan mode
+            if self.permission_mode == "plan":
+                prompt = self._get_plan_mode_instructions() + prompt
+
             # Send message with images if any
             if self.pending_images:
                 message = self._build_message_with_images(prompt)
@@ -679,11 +725,29 @@ class Agent:
         if tool_name == ToolName.ASK_USER_QUESTION:
             return await self._handle_ask_user_question(tool_input)
 
-        # Always allow plan mode tools and chic MCP tools
-        if tool_name in (ToolName.ENTER_PLAN_MODE, ToolName.EXIT_PLAN_MODE):
+        # Auto-allow EnterPlanMode; ExitPlanMode falls through to normal permission flow
+        if tool_name == ToolName.ENTER_PLAN_MODE:
             return PermissionResultAllow()
         if tool_name.startswith("mcp__chic__"):
             return PermissionResultAllow()
+
+        # Block mutating tools in plan mode (except writes to plan file)
+        # Note: PreToolUse hook in app.py also blocks these; this is a fallback
+        if self.permission_mode == "plan" and tool_name in self.PLAN_MODE_BLOCKED_TOOLS:
+            # Allow Write/Edit to files in ~/.claude/plans/
+            if tool_name in (ToolName.WRITE, ToolName.EDIT):
+                file_path = tool_input.get("file_path", "")
+                if file_path:
+                    plans_dir = Path.home() / ".claude" / "plans"
+                    resolved = Path(file_path).expanduser().resolve()
+                    if str(resolved).startswith(str(plans_dir)):
+                        log.info(f"Auto-approved {tool_name} to plan file (plan mode)")
+                        return PermissionResultAllow()
+            log.info(f"Denied {tool_name} (plan mode)")
+            return PermissionResultDeny(
+                message=f"{tool_name} is not available in plan mode. Write your plan to the plan file and use ExitPlanMode when ready.",
+                interrupt=False,
+            )
 
         # Auto-approve edits if in acceptEdits mode
         if self.permission_mode == "acceptEdits" and tool_name in self.AUTO_EDIT_TOOLS:
@@ -810,6 +874,11 @@ class Agent:
         assert mode in self.PERMISSION_MODES, f"Invalid permission mode: {mode}"
         if self.permission_mode != mode:
             self.permission_mode = mode
+            # Fetch plan path when entering plan mode
+            if mode == "plan" and self.session_id and not self.plan_path:
+                self.plan_path = await get_plan_path_for_session(
+                    self.session_id, cwd=self.cwd, must_exist=False
+                )
             # Only call SDK if connected (client exists and has active connection)
             if self.client and self.session_id:
                 await self.client.set_permission_mode(mode)

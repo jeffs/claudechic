@@ -101,6 +101,18 @@ class ToolUseWidget(BaseToolWidget):
         if self.block.name == ToolName.SKILL and not self.block.input.get("args"):
             yield Static(self._header, classes="skill-header", markup=False)
             return
+        # ExitPlanMode: show plan as Markdown with special styling
+        if self.block.name == ToolName.EXIT_PLAN_MODE:
+            self.add_class("exit-plan-mode")
+            plan_content = self._get_plan_content()
+            with QuietCollapsible(
+                title=self._header, collapsed=self._initial_collapsed
+            ):
+                if plan_content:
+                    yield Markdown(plan_content, id="plan-content")
+                else:
+                    yield Static("(Plan content not available)", id="tool-output")
+            return
         with QuietCollapsible(title=self._header, collapsed=self._initial_collapsed):
             if self.block.name == ToolName.EDIT:
                 path = make_relative(self.block.input.get("file_path", ""), self._cwd)
@@ -139,6 +151,40 @@ class ToolUseWidget(BaseToolWidget):
             event.stop()
             if hasattr(self, "_plan_path"):
                 self.post_message(EditPlanRequested(self._plan_path))
+
+    def _get_plan_content(self) -> str | None:
+        """Get plan content for ExitPlanMode display.
+
+        Tries multiple sources:
+        1. 'plan' field in tool input (SDK includes full plan text)
+        2. Fallback: most recently modified plan file in ~/.claude/plans/
+           (only if modified within last 60 seconds, to avoid wrong file)
+        """
+        # Prefer plan from tool input (most reliable)
+        if plan := self.block.input.get("plan"):
+            return plan
+
+        # Fallback: find most recently modified plan file
+        # This is less reliable if multiple sessions are active
+        import time
+
+        plans_dir = Path.home() / ".claude" / "plans"
+        if plans_dir.exists():
+            try:
+                plan_files = sorted(
+                    plans_dir.glob("*.md"),
+                    key=lambda p: p.stat().st_mtime,
+                    reverse=True,
+                )
+                if plan_files:
+                    recent = plan_files[0]
+                    # Only use if very recently modified (plan was just written)
+                    if time.time() - recent.stat().st_mtime < 60:
+                        self._plan_path = recent
+                        return recent.read_text()
+            except Exception:
+                pass
+        return None
 
     def _extract_plan_from_result(self, content: str) -> str | None:
         """Extract plan from ExitPlanMode result content.
@@ -220,10 +266,12 @@ class ToolUseWidget(BaseToolWidget):
                         preview += f"\n... ({shown} of {total} lines shown)"
                     output_widget.update(preview)
                 elif self.block.name == ToolName.EXIT_PLAN_MODE:
-                    # Extract plan from result and render
+                    # Extract plan from result and render as Markdown
                     plan = self._extract_plan_from_result(content)
                     if plan:
-                        output_widget.update(plan)
+                        # Replace the Static with Markdown widget
+                        output_widget.remove()
+                        collapsible.mount(Markdown(plan, id="plan-content"))
                     # Add View Plan button if we can find the path
                     plan_match = PLAN_PATH_PATTERN.search(content)
                     if plan_match:

@@ -17,6 +17,7 @@ class ToolName(StrEnum):
     EDIT = "Edit"
     WRITE = "Write"
     READ = "Read"
+    NOTEBOOK_EDIT = "NotebookEdit"
 
     # Command execution
     BASH = "Bash"

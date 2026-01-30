@@ -14,6 +14,7 @@ from pathlib import Path
 from typing import Any, TYPE_CHECKING
 
 if TYPE_CHECKING:
+    from claude_agent_sdk.types import HookEvent
     from claudechic.screens.chat import ChatScreen
 
 from textual.app import App
@@ -33,6 +34,7 @@ from claude_agent_sdk import (
     ToolUseBlock,
     ResultMessage,
 )
+from claude_agent_sdk.types import HookMatcher
 from claudechic.messages import (
     ResponseComplete,
     SystemNotification,
@@ -549,6 +551,41 @@ class ChatApp(App):
             return
         self._show_system_info(message, "warning", None)
 
+    def _plan_mode_hooks(self) -> "dict[HookEvent, list[HookMatcher]]":
+        """Create hooks for plan mode enforcement."""
+        # Tools that should be blocked in plan mode (except plan file writes)
+        blocked_tools = {"Edit", "Write", "Bash", "NotebookEdit"}
+        plans_dir = str(Path.home() / ".claude" / "plans")
+
+        async def block_mutating_tools(
+            hook_input: dict,
+            match: str | None,  # noqa: ARG001
+            ctx: object,  # noqa: ARG001
+        ) -> dict:
+            """PreToolUse hook: block Edit/Write/Bash in plan mode (allow plan file)."""
+            permission_mode = hook_input.get("permission_mode", "default")
+            tool_name = hook_input.get("tool_name", "")
+            tool_input = hook_input.get("tool_input", {})
+
+            if permission_mode == "plan" and tool_name in blocked_tools:
+                # Allow Write/Edit to files in ~/.claude/plans/
+                if tool_name in ("Write", "Edit"):
+                    file_path = tool_input.get("file_path", "")
+                    if file_path:
+                        # Expand ~ and resolve to absolute path
+                        resolved = str(Path(file_path).expanduser().resolve())
+                        if resolved.startswith(plans_dir):
+                            return {}  # Allow it
+                return {
+                    "decision": "block",
+                    "reason": f"{tool_name} is not available in plan mode. Write your plan to the plan file and use ExitPlanMode when ready.",
+                }
+            return {}
+
+        return {
+            "PreToolUse": [HookMatcher(matcher=None, hooks=[block_mutating_tools])],  # type: ignore[arg-type]
+        }
+
     def _make_options(
         self,
         cwd: Path | None = None,
@@ -587,6 +624,7 @@ class ChatApp(App):
             mcp_servers={"chic": create_chic_server(caller_name=agent_name)},
             include_partial_messages=True,
             stderr=self._handle_sdk_stderr,
+            hooks=self._plan_mode_hooks(),
         )
 
     async def on_mount(self) -> None:
