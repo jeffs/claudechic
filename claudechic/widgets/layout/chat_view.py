@@ -25,6 +25,7 @@ from claudechic.widgets.content.message import (
 )
 from claudechic.widgets.primitives.scroll import AutoHideScroll
 from claudechic.widgets.content.tools import ToolUseWidget, TaskWidget, AgentToolWidget
+from claudechic.widgets.content.collapsed_turn import CollapsedTurn
 
 if TYPE_CHECKING:
     from claude_agent_sdk import ToolUseBlock, ToolResultBlock
@@ -43,6 +44,9 @@ COLLAPSE_BY_DEFAULT = {
 
 # How many recent tools to keep expanded (0 = collapse all)
 RECENT_TOOLS_EXPANDED = CONFIG.get("recent-tools-expanded", 2)
+
+# How many recent turns to render fully (older turns collapsed into single widget)
+RECENT_TURNS_FULL = CONFIG.get("recent-turns-full", 3)
 
 
 class ChatView(AutoHideScroll):
@@ -110,50 +114,112 @@ class ChatView(AutoHideScroll):
     # -----------------------------------------------------------------------
 
     def set_agent(self, agent: Agent | None) -> None:
-        """Set the agent to render. Triggers full re-render from history."""
+        """Set the agent to render. Triggers full re-render from history.
+
+        If the view is hidden (background agent), rendering is deferred until
+        the view becomes visible via flush_deferred_updates().
+        """
         self._agent = agent
-        self._render_full()
+        if self.is_hidden:
+            self._needs_rerender = True
+        else:
+            self._render_full()
 
     def _render_full(self) -> None:
         """Fully re-render the chat view from agent.messages.
 
-        Uses mount_all() to batch all widget mounts into a single CSS recalculation,
-        which is much faster than mounting widgets one at a time.
+        Old turns (beyond RECENT_TURNS_FULL) are collapsed into lightweight
+        CollapsedTurn widgets that lazy-load full content on expand.
+
+        Uses mount_all() to batch all widget mounts into a single CSS recalculation.
         """
         self.clear()
         if not self._agent:
             return
 
-        # Count total tool uses to determine which to collapse
-        # (collapse all except last RECENT_TOOLS_EXPANDED)
-        total_tools = sum(
-            sum(1 for b in item.content.blocks if isinstance(b, ToolUse))
-            for item in self._agent.messages
-            if item.role == "assistant" and isinstance(item.content, AssistantContent)
-        )
-        collapse_threshold = total_tools - RECENT_TOOLS_EXPANDED
-        tool_index = 0
+        # Group messages into turns (user + assistant pairs)
+        turns: list[tuple[UserContent | None, AssistantContent | None]] = []
+        current_user: UserContent | None = None
 
-        # Build all widgets first, then mount in one batch
-        widgets: list[Widget] = []
         for item in self._agent.messages:
             if item.role == "user" and isinstance(item.content, UserContent):
-                # Format inter-agent messages (ask_agent/tell_agent)
-                text, is_agent = format_agent_prompt(item.content.text)
-                widgets.extend(
-                    self._create_user_widgets(text, item.content.images, is_agent)
-                )
+                # Start new turn
+                if current_user is not None:
+                    # Previous user had no assistant response
+                    turns.append((current_user, None))
+                current_user = item.content
             elif item.role == "assistant" and isinstance(
                 item.content, AssistantContent
             ):
-                new_widgets, tool_index = self._create_assistant_widgets(
-                    item.content, tool_index, collapse_threshold
+                # Complete current turn
+                turns.append((current_user, item.content))
+                current_user = None
+
+        # Handle trailing user message with no response yet
+        if current_user is not None:
+            turns.append((current_user, None))
+
+        # Determine which turns to collapse (all but last RECENT_TURNS_FULL)
+        collapse_before = max(0, len(turns) - RECENT_TURNS_FULL)
+
+        # Count tools in recent turns for tool collapse threshold
+        recent_tools = sum(
+            sum(1 for b in asst.blocks if isinstance(b, ToolUse))
+            for _, asst in turns[collapse_before:]
+            if asst is not None
+        )
+        collapse_threshold = recent_tools - RECENT_TOOLS_EXPANDED
+        tool_index = 0
+
+        # Build widgets
+        widgets: list[Widget] = []
+
+        for turn_idx, (user_content, assistant_content) in enumerate(turns):
+            if turn_idx < collapse_before and user_content and assistant_content:
+                # Old turn: collapse into single widget with lazy expansion
+                widgets.append(
+                    self._create_collapsed_turn(user_content, assistant_content)
                 )
-                widgets.extend(new_widgets)
+            else:
+                # Recent turn: render fully
+                if user_content:
+                    text, is_agent = format_agent_prompt(user_content.text)
+                    widgets.extend(
+                        self._create_user_widgets(text, user_content.images, is_agent)
+                    )
+                if assistant_content:
+                    new_widgets, tool_index = self._create_assistant_widgets(
+                        assistant_content, tool_index, collapse_threshold
+                    )
+                    widgets.extend(new_widgets)
 
         # Single mount_all triggers one CSS recalculation instead of N
         self.mount_all(widgets)
         self.scroll_end(animate=False)
+
+    def _create_collapsed_turn(
+        self, user_content: UserContent, assistant_content: AssistantContent
+    ) -> CollapsedTurn:
+        """Create a collapsed turn widget with lazy expansion."""
+
+        def make_turn_widgets() -> list[Widget]:
+            """Factory to create full widgets when turn is expanded."""
+            widgets: list[Widget] = []
+            # User message
+            text, is_agent = format_agent_prompt(user_content.text)
+            widgets.extend(
+                self._create_user_widgets(text, user_content.images, is_agent)
+            )
+            # Assistant response (collapse all tools, ignore returned tool_index)
+            new_widgets, _ = self._create_assistant_widgets(
+                assistant_content, tool_index=0, collapse_threshold=999
+            )
+            widgets.extend(new_widgets)
+            return widgets
+
+        return CollapsedTurn(
+            user_content, assistant_content, widget_factory=make_turn_widgets
+        )
 
     def _create_user_widgets(
         self, text: str, images: list[ImageAttachment], is_agent: bool = False
