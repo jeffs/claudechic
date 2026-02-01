@@ -343,11 +343,15 @@ ShellOutputWidget #shell-output {
 #input-container {
     height: auto;
     min-height: 3;  /* Ensure input always visible (1 line + padding) */
-    margin: 1 2 1 1;  /* Left margin matches chat-view padding */
+    margin: 1 2 0 1;  /* Left margin matches chat-view padding */
     padding: 1 2;  /* Vertical padding for space around cursor */
-    border-left: wide $primary;
-    background: $primary 10%;
+    border: solid $panel;
+    background: $surface;
     pointer: text;
+}
+
+#input-container:focus-within {
+    border: solid $primary;
 }
 
 #input-container.hidden {
