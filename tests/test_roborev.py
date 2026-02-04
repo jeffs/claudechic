@@ -461,7 +461,13 @@ class TestReviewItemJobId:
 class TestReviewItemNonStringFields:
     def test_non_string_status_renders(self):
         """Non-string status should not crash rendering."""
-        job = ReviewJob(id="1", status=123, verdict="P", git_ref="abc1234", commit_subject="test")  # type: ignore[arg-type]
+        job = ReviewJob(
+            id="1",
+            status=123,  # pyright: ignore[reportArgumentType]
+            verdict="P",
+            git_ref="abc1234",
+            commit_subject="test",
+        )
         item = ReviewItem(job)
         text = item.render()
         assert "#1 " in text.plain
@@ -517,7 +523,10 @@ class TestIsRoborevAvailableCache:
         roborev_cli._roborev_available = None
         roborev_cli._roborev_checked_at = 0.0
 
-        with patch("claudechic.features.roborev.cli.shutil.which", return_value="/usr/bin/roborev") as mock_which:
+        with patch(
+            "claudechic.features.roborev.cli.shutil.which",
+            return_value="/usr/bin/roborev",
+        ) as mock_which:
             assert roborev_cli.is_roborev_available() is True
             assert roborev_cli.is_roborev_available() is True
             assert mock_which.call_count == 1  # cached, not called twice
@@ -532,12 +541,22 @@ class TestIsRoborevAvailableCache:
         roborev_cli._roborev_checked_at = 0.0
 
         with (
-            patch("claudechic.features.roborev.cli.shutil.which", return_value="/usr/bin/roborev") as mock_which,
-            patch("claudechic.features.roborev.cli.time.monotonic", side_effect=[0.0, 0.5, 61.0, 61.0]),
+            patch(
+                "claudechic.features.roborev.cli.shutil.which",
+                return_value="/usr/bin/roborev",
+            ) as mock_which,
+            patch(
+                "claudechic.features.roborev.cli.time.monotonic",
+                side_effect=[0.0, 0.5, 61.0, 61.0],
+            ),
         ):
-            assert roborev_cli.is_roborev_available() is True  # monotonic=0.0, calls which
+            assert (
+                roborev_cli.is_roborev_available() is True
+            )  # monotonic=0.0, calls which
             assert roborev_cli.is_roborev_available() is True  # monotonic=0.5, cached
-            assert roborev_cli.is_roborev_available() is True  # monotonic=61.0, expired, calls which again
+            assert (
+                roborev_cli.is_roborev_available() is True
+            )  # monotonic=61.0, expired, calls which again
             assert mock_which.call_count == 2
 
         roborev_cli._roborev_available = None

@@ -29,6 +29,7 @@ def has_running_reviews(reviews: list[ReviewJob]) -> bool:
     """
     return any(_normalize_status(r.status) in _RUNNING_STATUSES for r in reviews)
 
+
 # Braille spinner frames (same as widgets.primitives.Spinner)
 _SPINNER_FRAMES = "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏"
 
@@ -84,7 +85,9 @@ class ReviewItem(Static):
             icon = ("? ", "dim")
 
         # Job ID (check for None and empty — 0 is a valid ID)
-        job_id = "?" if self.review.id is None or self.review.id == "" else self.review.id
+        job_id = (
+            "?" if self.review.id is None or self.review.id == "" else self.review.id
+        )
 
         # Short SHA (first 7 chars of git_ref)
         sha = self.review.git_ref[:7] if self.review.git_ref else "???????"
@@ -95,7 +98,9 @@ class ReviewItem(Static):
         if len(subject) > max_len:
             subject = subject[: max_len - 1] + "…"
 
-        return Text.assemble(icon, (f"#{job_id} ", "bold dim"), (f"{sha} ", "dim"), (subject, ""))
+        return Text.assemble(
+            icon, (f"#{job_id} ", "bold dim"), (f"{sha} ", "dim"), (subject, "")
+        )
 
     def on_click(self, event) -> None:  # noqa: ARG002
         """Show review detail in chat via /reviews <id>."""
