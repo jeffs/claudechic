@@ -251,7 +251,9 @@ def _expand_worktree_path(template: str, repo_name: str, feature_name: str) -> P
         raise ValueError(f"Worktree path contains path traversal component: {path}")
 
     if not path.is_absolute():
-        raise ValueError(f"Worktree path template must expand to an absolute path, got: {path}")
+        raise ValueError(
+            f"Worktree path template must expand to an absolute path, got: {path}"
+        )
 
     return path.resolve()
 
@@ -267,7 +269,9 @@ def start_worktree(feature_name: str) -> tuple[bool, str, Path | None]:
 
         if path_template:
             try:
-                worktree_dir = _expand_worktree_path(path_template, repo_name, feature_name)
+                worktree_dir = _expand_worktree_path(
+                    path_template, repo_name, feature_name
+                )
                 worktree_dir.parent.mkdir(parents=True, exist_ok=True)
             except ValueError as e:
                 return False, str(e), None

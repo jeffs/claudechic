@@ -139,7 +139,9 @@ class TestStartWorktreeWithConfig:
 
         success, message, path = start_worktree("test-feature")
 
-        expected_path = (tmp_path / "worktrees" / "test-repo" / "test-feature").resolve()
+        expected_path = (
+            tmp_path / "worktrees" / "test-repo" / "test-feature"
+        ).resolve()
         assert success
         assert path == expected_path
         assert "Created worktree at" in message
@@ -152,7 +154,9 @@ class TestStartWorktreeWithConfig:
             {},
         ],
     )
-    def test_uses_sibling_behavior_when_no_template(self, mock_worktree_deps, config_return):
+    def test_uses_sibling_behavior_when_no_template(
+        self, mock_worktree_deps, config_return
+    ):
         """Test that sibling behavior is preserved when path_template is null or missing."""
         mocks = mock_worktree_deps
         mocks["get_repo"].return_value = "test-repo"
@@ -167,7 +171,9 @@ class TestStartWorktreeWithConfig:
         assert path == expected_path
         mocks["run"].assert_called_once()
 
-    def test_creates_parent_directories_for_custom_path(self, mock_worktree_deps, tmp_path):
+    def test_creates_parent_directories_for_custom_path(
+        self, mock_worktree_deps, tmp_path
+    ):
         """Test that parent directories are created for custom paths."""
         mocks = mock_worktree_deps
         mocks["get_repo"].return_value = "test-repo"
@@ -178,7 +184,9 @@ class TestStartWorktreeWithConfig:
 
         success, message, path = start_worktree("test-feature")
 
-        expected_path = (tmp_path / "deep" / "nested" / "path" / "test-repo" / "test-feature").resolve()
+        expected_path = (
+            tmp_path / "deep" / "nested" / "path" / "test-repo" / "test-feature"
+        ).resolve()
         assert success
         assert path == expected_path
         assert expected_path.parent.exists()

@@ -47,8 +47,8 @@ class MockApp:
         self.agent_mgr = MockAgentManager()
 
     def run_worker(self, coro):
-        """Mock run_worker - just ignore the coroutine."""
-        pass
+        """Mock run_worker - close the coroutine to avoid RuntimeWarning."""
+        coro.close()
 
 
 @pytest.fixture
